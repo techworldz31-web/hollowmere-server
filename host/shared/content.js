@@ -327,7 +327,7 @@ export const MOBS = {
   goblin_chief: {
     name: 'Grukk the Goblin Chief', sprite: 'goblin_chief', hp: 950, atk: 30, def: 7, speed: 2.7,
     range: 1.5, cooldown: 1.4, windup: 0.5, aggro: 8, leash: 12,
-    xp: 320, gold: [70, 130], loot: [['potion', 1], ['trophy', 1], ['scrap', 1]], gear: [1, [2, 3]], rarity: [30, 45, 25], respawn: 90, boss: true,
+    xp: 320, gold: [70, 130], mech: 'own', loot: [['potion', 1], ['trophy', 1], ['scrap', 1]], gear: [1, [2, 3]], rarity: [30, 45, 25], respawn: 90, boss: true,
   },
   // ---- the Hollow Deep (dungeon monsters don't respawn; each run is fresh)
   goblin_miner: {
@@ -380,7 +380,7 @@ Object.assign(MOBS, {
     xp: 50, gold: [5, 14], loot: [['potion', 0.15], ['scrap', 0.5]], gear: [0.06, [1, 2]], rarity: [70, 25, 5], raid: true,
   },
   raid_captain: {
-    name: 'Warboss Gnash', sprite: 'goblin_chief', hp: 1000, atk: 28, def: 7, speed: 2.6,
+    name: 'Warboss Gnash', sprite: 'goblin_chief', hp: 1000, atk: 28, def: 7, mech: 'own', speed: 2.6,
     range: 1.5, cooldown: 1.4, windup: 0.5, aggro: 11, leash: 70,
     xp: 320, gold: [80, 140], loot: [['potion', 1], ['scrap', 1], ['scrap', 1]], gear: [1, [2, 3]], rarity: [20, 50, 30], boss: true, raid: true,
   },
@@ -415,7 +415,7 @@ Object.assign(MOBS, {
   sand_skitterer: { name: 'Sand Skitterer', sprite: 'spider', hp: 48, atk: 6, def: 1, speed: 2.2, range: 1.1, cooldown: 1.4, windup: 0.4, aggro: 5, leash: 10,
     xp: 24, gold: [1, 4], loot: [['potion', 0.12]], gear: [0, [1]], rarity: [1, 0, 0], lv: 2, scale: 0.6, isle: true },
   pinewood_alpha: { name: 'Greymuzzle, the Pack Alpha', sprite: 'wolf', hp: 190, atk: 10, def: 2, speed: 2.8, range: 1.3, cooldown: 1.3, windup: 0.45, aggro: 7, leash: 13,
-    xp: 120, gold: [12, 24], loot: [['potion', 1], ['rough_hide', 1]], gear: [1, [1]], rarity: [60, 40, 0], lv: 4, boss: true, scale: 1.12, isle: true },
+    xp: 120, gold: [12, 24], loot: [['potion', 1], ['rough_hide', 1]], gear: [1, [1]], rarity: [60, 40, 0], lv: 4, boss: true, scale: 1.12, isle: true, mech: 'own' },
   goblin_scout: { name: 'Goblin Scout', sprite: 'goblin', hp: 70, atk: 8, def: 2, speed: 2.4, range: 1.3, cooldown: 1.25, windup: 0.35, aggro: 7, leash: 12,
     xp: 44, gold: [4, 10], loot: [['potion', 0.25], ['scrap', 0.6]], gear: [0.15, [1]], rarity: [70, 30, 0], lv: 4, isle: true },
   scout_leader: { name: 'Snikt the Scout Leader', sprite: 'goblin_chief', hp: 240, atk: 12, def: 3, speed: 2.5, range: 1.5, cooldown: 1.4, windup: 0.55, aggro: 8, leash: 14,

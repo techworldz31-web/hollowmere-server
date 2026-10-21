@@ -103,7 +103,7 @@ export function validate(m) {
       && (m.name === undefined || str(m.name, 24)) && (m.tag === undefined || str(m.tag, 8)) && (m.text === undefined || str(m.text, 140))
       && (m.slot === undefined || (int(m.slot) && m.slot >= 0 && m.slot < 200)) && (m.i === undefined || (int(m.i) && m.i >= 0 && m.i < 40)) && (m.amount === undefined || (num(m.amount) && m.amount >= 0 && m.amount <= 1e9));
     case C2S.FRIEND: return (m.op === 'add' || m.op === 'remove') && str(m.name, 24);
-    case C2S.TUT: return ['intro', 'skip', 'next'].includes(m.op);
+    case C2S.TUT: return ['intro', 'skip', 'next', 'scene', 'sceneend'].includes(m.op) && (m.id == null || (typeof m.id === 'string' && m.id.length <= 20));
     default: return false;
   }
 }

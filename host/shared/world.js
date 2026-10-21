@@ -26,6 +26,7 @@ import { partyMethods, PARTY_SHARE_RANGE } from './world_party.js';
 import { progressMethods, freshProg } from './world_progress.js';
 import { socialMethods } from './world_social.js';
 import { tutorialMethods } from './world_tutorial.js';
+import { bossMethods } from './world_bosses.js';
 import { swapMethods } from './world_trade.js';
 import { specMethods } from './world_specs.js';
 import { SPECS, skillList } from './specs.js';
@@ -822,6 +823,7 @@ export class World {
   // critChance: the attack's own chance (players add their gear and path bonus); 1 = always
   applyDamage(t, raw, src, critChance = 0) {
     if (!t || t.hp <= 0) return;
+    if (t.sceneSafe > this.tick) return;                 // watching a region's entry scene: not to be attacked
     let dmg = raw * (0.85 + this.rng() * 0.3) - this.defOf(t) * 0.6;
     // level gap: hitting something above your level does much less, and it hits you much harder
     const lvOf = (e) => e?.type === 'mob' ? (e.rareLv || MOBS[e.kind]?.lv || 1) : (e?.lv || e?.level || 1);
@@ -1366,6 +1368,7 @@ export class World {
       let best = null, bd = sight;
       for (const e of this.playersNear(m.x, m.y, sight, m.zone)) {
         const d = Math.hypot(e.x - m.x, e.y - m.y);
+        if (e.sceneSafe > this.tick) continue;
         if (!def.boss && this.chasersOf(e.id, m.zone) >= 2) continue;
         if (d < bd && lineClear(map, m.x, m.y, e.x, e.y, 0.1)) { bd = d; best = e; }
       }
@@ -1442,6 +1445,7 @@ export class World {
   bossMechanics(m, t, def) {
     const at = m.mechAt, now = this.tick;
     const ready = (k, sec) => { if ((at[k] ?? now + T(3)) <= now) { at[k] = now + T(sec); return true; } if (at[k] == null) at[k] = now + T(3); return false; };
+    if (this.bossFight(m, t, def, ready)) return;           // world_bosses.js
     if (def.mech === 'foreman') {
       if (!m.enraged && m.hp < m.maxHp * 0.5) {
         m.enraged = true;
@@ -2074,4 +2078,4 @@ export class World {
 }
 
 // trades (fishing, gathering, cooking) and town events live in their own files
-Object.assign(World.prototype, tradeMethods, townMethods, farmMethods, questMethods, travelMethods, specMethods, partyMethods, swapMethods, progressMethods, socialMethods, tutorialMethods);
+Object.assign(World.prototype, tradeMethods, townMethods, farmMethods, questMethods, travelMethods, specMethods, partyMethods, swapMethods, progressMethods, socialMethods, tutorialMethods, bossMethods);

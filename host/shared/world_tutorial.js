@@ -310,6 +310,16 @@ export const tutorialMethods = {
     this.leaveIsle(p, how);
   },
   tutorialOp(p, m) {
+    // a region's entry scene is playing for this hero: monsters leave them be for its length
+    // (once per region per visit to the server, so it can't be used to stay safe)
+    if (m.op === 'scene') {
+      const id = String(m.id || '').slice(0, 20), seen = p.scenesSeen || (p.scenesSeen = new Set());
+      if (seen.has(id) || seen.size > 8) return;
+      seen.add(id); p.sceneSafe = this.tick + T(10);
+      for (const e of this.ents.values()) if (e.type === 'mob' && e.target === p.id && !MOBS[e.kind].boss) { e.target = null; e.state = 'return'; e.path = null; }
+      return;
+    }
+    if (m.op === 'sceneend') { p.sceneSafe = 0; return; }
     if (!p.tut || p.tut.done) return;
     if (m.op === 'intro' && p.tut.s === 0) this.tutAdvance(p, 1);
     else if (m.op === 'skip') {
