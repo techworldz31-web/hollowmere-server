@@ -1,0 +1,94 @@
+#cloud-config
+# Hollowmere game server: paste this whole file into Hetzner's "Cloud config" box when you create
+# the server. It installs everything, starts the game with a permanent https address, and keeps
+# itself up to date from GitHub. Change the two lines marked CHANGE ME first.
+package_update: true
+packages: [git, curl, ufw, xz-utils]
+write_files:
+  - path: /root/hollowmere-install.sh
+    permissions: '0700'
+    content: |
+      #!/bin/bash
+      set -e
+      REPO="https://github.com/techworldz31-web/hollowmere-server.git"
+      ADMIN_PW="pick-a-long-secret-password"                         # CHANGE ME: your admin password (/admin <password> in game)
+      H=/opt/hollowmere
+      mkdir -p $H/data
+      ARCH=$(uname -m); case "$ARCH" in aarch64|arm64) NA=arm64; CA=arm64 ;; *) NA=x64; CA=amd64 ;; esac
+      # Node.js
+      NV=v22.11.0
+      curl -fsSL "https://nodejs.org/dist/$NV/node-$NV-linux-$NA.tar.xz" | tar -xJ -C $H
+      ln -sf $H/node-$NV-linux-$NA/bin/node /usr/local/bin/node
+      # the game
+      git clone --depth 1 "$REPO" $H/app
+      printf 'Hollowmere admin password (type /admin <password> in the game chat)\npassword: %s\n' "$ADMIN_PW" > "$H/ADMIN PASSWORD.txt"
+      useradd -r -s /usr/sbin/nologin hollowmere || true
+      chown -R hollowmere:hollowmere $H
+      # the web address: this server's IP as a free name (1-2-3-4.sslip.io) with an automatic https certificate
+      IP=$(curl -fsS http://169.254.169.254/hetzner/v1/metadata/public-ipv4 || curl -fsS https://api.ipify.org)
+      DOMAIN="$(echo "$IP" | tr . -).sslip.io"
+      curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=$CA" -o /usr/local/bin/caddy
+      chmod +x /usr/local/bin/caddy
+      mkdir -p /etc/caddy
+      printf '%s {\n  encode gzip\n  reverse_proxy 127.0.0.1:8080\n}\n' "$DOMAIN" > /etc/caddy/Caddyfile
+      echo "https://$DOMAIN" > $H/LINK.txt
+      # services: the game, the web front door, and a check for updates every 2 minutes
+      cat > /etc/systemd/system/hollowmere.service <<EOF
+      [Unit]
+      Description=Hollowmere game server
+      After=network-online.target
+      [Service]
+      User=hollowmere
+      WorkingDirectory=$H/app
+      Environment=PORT=8080 HM_BIND=127.0.0.1 HM_GAME=$H/app HM_DATA=$H/data "HM_ADMINPW=$H/ADMIN PASSWORD.txt"
+      ExecStart=/usr/local/bin/node host/server/server.js
+      Restart=always
+      RestartSec=3
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+      cat > /etc/systemd/system/caddy.service <<EOF
+      [Unit]
+      Description=Caddy web server (https for Hollowmere)
+      After=network-online.target
+      [Service]
+      ExecStart=/usr/local/bin/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+      Restart=always
+      Environment=XDG_DATA_HOME=/var/lib XDG_CONFIG_HOME=/etc
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+      cat > $H/update.sh <<'EOF'
+      #!/bin/bash
+      # new version on GitHub? fetch it and restart the game (players reconnect automatically)
+      cd /opt/hollowmere/app || exit 0
+      sudo -u hollowmere git fetch -q origin main || exit 0
+      if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+        sudo -u hollowmere git reset -q --hard origin/main
+        systemctl restart hollowmere
+      fi
+      EOF
+      chmod +x $H/update.sh
+      git config --system --add safe.directory $H/app
+      cat > /etc/systemd/system/hollowmere-update.service <<EOF
+      [Unit]
+      Description=Hollowmere update check
+      [Service]
+      Type=oneshot
+      ExecStart=$H/update.sh
+      EOF
+      cat > /etc/systemd/system/hollowmere-update.timer <<EOF
+      [Unit]
+      Description=Check GitHub for a new Hollowmere version every 2 minutes
+      [Timer]
+      OnBootSec=2min
+      OnUnitActiveSec=2min
+      [Install]
+      WantedBy=timers.target
+      EOF
+      # firewall: only ssh and the web
+      ufw allow 22/tcp; ufw allow 80/tcp; ufw allow 443/tcp; ufw --force enable
+      systemctl daemon-reload
+      systemctl enable --now hollowmere caddy hollowmere-update.timer
+runcmd:
+  - [bash, /root/hollowmere-install.sh]
