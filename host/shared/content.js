@@ -129,7 +129,7 @@ export const OBJECTS = {
   stable:       { sprites: ['stable'], foot: [3, 2], solid: true, fade: true, lights: [{ x: 0, y: 0.75, z: 1.8, r: 2.6, c: WARM, flicker: true }] },
   stall:        { sprites: ['stall'], foot: [2, 2], solid: true, fade: true },
   tent:         { sprites: ['tent'], foot: [2, 2], solid: true, fade: true },
-  campfire:     { sprites: ['campfire'], foot: [1, 1], solid: true, anim: 6, fire: [{ x: 0, y: 0, z: 0.12, s: 0.72, n: 2, light: true }], lights: [{ x: 0, y: 0, z: 0.5, r: 6, c: FIRE, flicker: true }] },
+  campfire:     { sprites: ['campfire'], foot: [1, 1], solid: true, anim: 6, lights: [{ x: 0, y: 0, z: 0.5, r: 6, c: FIRE, flicker: true }] },
   logs:         { sprites: ['logs'], foot: [2, 1], solid: true },
   forge:        { sprites: ['forge'], foot: [2, 2], solid: true, fade: true, smoke: [{ x: -0.25, y: 0.1, z: 3.3 }], lights: [{ x: 0.2, y: 0.5, z: 0.7, r: 3.5, c: FIRE, flicker: true }] },
   anvil:        { sprites: ['anvil'], foot: [1, 1], solid: true },
