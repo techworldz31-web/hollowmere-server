@@ -29,6 +29,7 @@ export const questMethods = {
     if (region !== p.region) {
       const was = p.region; p.region = region;
       if (region && region !== 'town') this.privateEvent(p, { e: 'region', name: REGIONS[region].name, levels: REGIONS[region].levels });
+      if (region === 'frostridge') this.ridgeSnow(p);
       else if (region === 'town' && was) this.privateEvent(p, { e: 'region', name: 'Hollowmere', levels: '' });
     }
   },

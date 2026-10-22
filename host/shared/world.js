@@ -71,6 +71,8 @@ export class World {
     this.map = generateMap(seed);
     this.zones.set('world', { id: 'world', kind: 'world', map: this.map, seed });
     for (const s of this.map.spawns) this.spawnMob(s.kind, s.x, s.y, 'world');
+    // how many of each kind stand in the world: a kind with few (they are spaced well apart) comes back sooner
+    this.kindCount = {}; for (const s of this.map.spawns) this.kindCount[s.kind] = (this.kindCount[s.kind] || 0) + 1;
     this.initProgress();
     this.initSocial();
     this.seatTaken = new Set();      // town benches someone is sitting on
@@ -454,6 +456,7 @@ export class World {
     const snap = { t: S2C.SNAP, tick: this.tick, tod: Math.round(this.tod * 1e4) / 1e4, wx: this.weather, ents };
     const tw = (this.town.market ? 1 : 0) | (this.town.festival ? 2 : 0) | (this.town.raid ? 4 : 0);
     if (tw) snap.tw = tw;
+    if (p.zone === 'world' && this.ridgeSnowing(p)) snap.sf = 1;   // Frostridge's snow, yours and your party's alone
     if (c.ev.length) { snap.ev = c.ev; c.ev = []; }
     if (p.selfDirty) {
       p.selfDirty = false;
@@ -1353,7 +1356,7 @@ export class World {
     if (m.burn || m.markUntil) this.updateMobEffects(m);
     if (m.anim === 'die') {
       if (m.zone !== 'world' || m.summoned || m.raid || m.rare || m.tutFor) { if (this.tick - m.deadAt > T(4)) this.ents.delete(m.id); return; }
-      if (this.tick - m.deadAt > T(def.boss ? Math.max(def.respawn || 0, 600) : m.zone === "world" ? 240 + (m.id % 7) * 15 : Math.max(def.respawn || 0, 120))) {
+      if (this.tick - m.deadAt > T(def.boss ? Math.max(def.respawn || 0, 600) : m.zone === "world" ? Math.max(30, Math.min(240, 240 * (this.kindCount?.[m.kind] || 20) / 20)) + (m.id % 7) * 5 : Math.max(def.respawn || 0, 120))) {
         m.x = m.spawn.x; m.y = m.spawn.y; m.hp = m.maxHp; m.state = 'idle'; m.slowUntil = 0;
         this.setAnim(m, 'idle'); m.wanderAt = this.tick + T(2);
       }

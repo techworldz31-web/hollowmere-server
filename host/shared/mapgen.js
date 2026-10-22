@@ -12,7 +12,7 @@ import { MAP_W, MAP_H, TERRAIN, LEVEL_H, dirFromVector } from './constants.js';
 import { OBJECTS } from './content.js';
 import { mulberry32, fbm, hash2 } from './rng.js';
 import { HOMES, hoursOf } from './town.js';
-import { SPAWN_PLAN } from './questline.js';
+import { SPAWN_PLAN, QUEST_MOBS } from './questline.js';
 import { seaDist, mountainH } from './outskirts.js';
 import { SIGN_BOARDS, SIGN_KINDS, CAMP_BOARDS, CAMP_KINDS, CROSS_KINDS, crossTip } from './signs.js';
 
@@ -848,25 +848,31 @@ export function generateMap(seed = WORLD_SEED) {
   spawns.push({ kind: 'goblin_chief', ...freeNear(C.x + 2, C.y + 1) });
   // the four new regions: monsters on the right tier of their plateau, never on a stair or in a camp
   let planI = -1;
-  for (const P of SPAWN_PLAN) {
-    if (P.r > 1) planI++;
-    const pid = 'p' + planI;
-    const boss = P.r <= 1, n = boss ? P.n : Math.max(3, Math.round(P.n * 2.9)), R = boss ? 0 : Math.min(P.r * 4, 34);
-    for (let k = 0; k < n; k++) {
-      let got = null;
-      for (let t = 0; t < 120 && !got; t++) {
-        const a = rand() * Math.PI * 2, d = boss ? 0 : 1 + Math.sqrt(rand()) * R;
-        const x = Math.floor(P.x + Math.cos(a) * d), y = Math.floor(P.y + Math.sin(a) * d);
-        if (!inside(x, y) || solid[idx(x, y)] || cliff[idx(x, y)] || (level[idx(x, y)] || 0) !== (P.tier || 0) || terrain[idx(x, y)] === TERRAIN.WATER) continue;
-        if (Object.values(spots).some((s) => Math.hypot(s.x - x, s.y - y) < (s.r || 4) + 2)) continue;
-        if (x >= TOWN.x0 - 6 && x <= TOWN.x1 + 6 && y >= TOWN.y0 - 6 && y <= TOWN.y1 + 6) continue;   // never in or right beside town
-        if (!boss && (!dry(x + 0.5, y + 0.5) || !ownGround(x + 0.5, y + 0.5, pid))) continue;
-        if (!boss && !mobGap(x + 0.5, y + 0.5, t < 80 ? GAP : 4)) continue;
-        got = { x: x + 0.5, y: y + 0.5 };
-      }
-      if (got || boss) spawns.push({ kind: P.kind, ...(got || freeNear(P.x, P.y)) });
+  const plans = SPAWN_PLAN.map((P) => { if (P.r > 1) planI++; const boss = P.r <= 1; return { P, pid: 'p' + planI, boss, n: boss ? P.n : Math.max(3, Math.round(P.n * 2.9)), R: boss ? 0 : Math.min(P.r * 4, 34), left: 0, miss: 0 }; });
+  // bosses first (their ground is kept clear), then every kind takes turns, one monster each,
+  // so two kinds sharing a region both get their share of the room
+  const placeMob = (pl) => {
+    const { P, pid, boss, R } = pl;
+    let got = null;
+    for (let t = 0; t < 400 && !got; t++) {
+      const a = rand() * Math.PI * 2, d = boss ? 0 : 1 + Math.sqrt(rand()) * R;
+      const x = Math.floor(P.x + Math.cos(a) * d), y = Math.floor(P.y + Math.sin(a) * d);
+      if (!inside(x, y) || solid[idx(x, y)] || cliff[idx(x, y)] || (level[idx(x, y)] || 0) !== (P.tier || 0) || terrain[idx(x, y)] === TERRAIN.WATER) continue;
+      if (Object.values(spots).some((s) => Math.hypot(s.x - x, s.y - y) < (s.r || 4) + 2)) continue;
+      if (x >= TOWN.x0 - 6 && x <= TOWN.x1 + 6 && y >= TOWN.y0 - 6 && y <= TOWN.y1 + 6) continue;   // never in or right beside town
+      if (!boss && (!dry(x + 0.5, y + 0.5) || !ownGround(x + 0.5, y + 0.5, pid))) continue;
+      // the same rule everywhere: no two monsters closer than the distance at which one notices you,
+      // so walking up to one wakes one (two at most), never the whole pack
+      if (!boss && !mobGap(x + 0.5, y + 0.5, GAP + 0.5)) continue;
+      got = { x: x + 0.5, y: y + 0.5 };
     }
-  }
+    if (got || boss) { spawns.push({ kind: P.kind, ...(got || freeNear(P.x, P.y)) }); return true; }
+    return false;
+  };
+  for (const pl of plans) if (pl.boss) for (let k = 0; k < pl.n; k++) placeMob(pl);
+  const herds = plans.filter((pl) => !pl.boss);
+  for (const pl of herds) pl.left = pl.n;
+  while (herds.some((pl) => pl.left > 0)) for (const pl of herds) if (pl.left > 0) { pl.left--; if (!placeMob(pl) && ++pl.miss >= 3) pl.left = 0; }
 
   const npcs = [
     { kind: 'elder', x: 99.5, y: 99.2, dir: 1 },

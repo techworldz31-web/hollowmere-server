@@ -8,6 +8,7 @@ import { S2C } from './protocol.js';
 import { gearFor, xpToNext, NPCS } from './content.js';
 import { REGIONS } from './questline.js';
 import { isBlocked } from './pathfind.js';
+import { buildWildNav, wildFree, wildRay, wildStep, wildGo } from './wildnav.js';
 
 const T = (s) => Math.round(s * TICK_RATE);
 const DEF = Object.fromEntries(POI_DEFS.map((d) => [d.id, d]));
@@ -22,8 +23,8 @@ const NOTES = {
 export const poiMethods = {
   // ---------------------------------------------------------------- life between the towns
   spawnWilds() {
-    const m = this.map, near = (x, y, r) => {
-      for (let k = 0; k < 60; k++) { const a = this.rng() * Math.PI * 2, d = this.rng() * r, tx = x + Math.cos(a) * d, ty = y + Math.sin(a) * d; if (!isBlocked(m, Math.floor(tx), Math.floor(ty)) && m.terrain[Math.floor(ty) * m.w + Math.floor(tx)] !== 0 && !Object.values(m.spots || {}).some((sp) => Math.hypot(sp.x - tx, sp.y - ty) < 10) && !(m.town && tx > m.town.x0 - 4 && tx < m.town.x1 + 4 && ty > m.town.y0 - 4 && ty < m.town.y1 + 4)) return { x: Math.floor(tx) + 0.5, y: Math.floor(ty) + 0.5 }; }
+    const m = this.map, near = (x, y, r, camps = false) => {
+      for (let k = 0; k < 60; k++) { const a = this.rng() * Math.PI * 2, d = this.rng() * r, tx = x + Math.cos(a) * d, ty = y + Math.sin(a) * d; if (!isBlocked(m, Math.floor(tx), Math.floor(ty)) && m.terrain[Math.floor(ty) * m.w + Math.floor(tx)] !== 0 && (camps || !Object.values(m.spots || {}).some((sp) => Math.hypot(sp.x - tx, sp.y - ty) < 10)) && !(m.town && tx > m.town.x0 - 4 && tx < m.town.x1 + 4 && ty > m.town.y0 - 4 && ty < m.town.y1 + 4)) return { x: Math.floor(tx) + 0.5, y: Math.floor(ty) + 0.5 }; }
       return null;
     };
     // foxes: in Whisperwood and the fields south of town; wild horses on the Highlands
@@ -38,38 +39,64 @@ export const poiMethods = {
     const routes = [[gates.s, sp.thornwick], [gates.n, sp.hermitage], [gates.w, sp.ridgewatch], [gates.s, sp.fenwatch]];
     routes.forEach(([a, b], i) => {
       if (!a || !b) return;
-      const A = near(a.x, a.y, 3) || a, B = near(b.x, b.y, 4) || b;
+      const A = near(a.x, a.y, 3, true) || a, B = near(b.x, b.y, 4, true) || b;   // the road's ends: by a gate, at the edge of a camp
       const n = this.spawnNpc(`traveller_${i + 1}`, A.x, A.y, 2); n.trip = [A, B]; n.leg = 1; n.pauseUntil = this.tick + this.rng() * 600;
     });
-    if (sp.thornwick) { const A = near(gates.s.x, gates.s.y, 3) || gates.s, B = near(sp.thornwick.x + 3, sp.thornwick.y - 3, 4) || sp.thornwick; const c = this.spawnNpc('road_cart', A.x, A.y, 2); c.trip = [A, B]; c.leg = 1; }
+    if (sp.thornwick) { const A = near(gates.s.x, gates.s.y, 3, true) || gates.s, B = near(sp.thornwick.x + 3, sp.thornwick.y - 3, 4, true) || sp.thornwick; const c = this.spawnNpc('road_cart', A.x, A.y, 2); c.trip = [A, B]; c.leg = 1; }
   },
-  // an animal: grazes and wanders near home, bolts when someone comes too close
+  // an animal: grazes, ambles from one patch of grass to the next, and bolts when someone comes too
+  // close (see wildnav.js for how they find their way: bushes and fences don't stop them, and they
+  // weave between tree trunks)
   updateWild(n, def) {
-    if (this.talking(n)) return;
-    if (this.tick % 5 === n.id % 5 && !(n.fleeTo && this.tick < n.fleeUntil)) {
-      const pl = this.playersNear(n.x, n.y, def.flee, n.zone)[0];
-      if (pl) {
-        const dx = n.x - pl.x, dy = n.y - pl.y, d = Math.hypot(dx, dy) || 1;
-        for (const turn of [0, 0.6, -0.6, 1.2, -1.2]) {
-          const a = Math.atan2(dy, dx) + turn, tx = n.x + Math.cos(a) * 7, ty = n.y + Math.sin(a) * 7;
-          if (!isBlocked(this.map, Math.floor(tx), Math.floor(ty)) && Math.hypot(tx - n.origin.x, ty - n.origin.y) < 22) { n.fleeTo = { x: tx, y: ty }; n.fleeUntil = this.tick + T(4); this.stopWalking(n); break; }
-        }
-      }
+    if (this.talking(n)) { n.wgoal = null; return; }
+    const nav = this.wildNav || (this.wildNav = buildWildNav(this.map));
+    const town = this.map.town, inTown = (x, y) => town && x > town.x0 - 3 && x < town.x1 + 3 && y > town.y0 - 3 && y < town.y1 + 3;
+    // who's about? (the nearest hero inside its flight distance)
+    if (this.tick % 3 === n.id % 3) {
+      let near = null, nd = def.flee;
+      for (const pl of this.playersNear(n.x, n.y, def.flee, n.zone)) { const d = Math.hypot(pl.x - n.x, pl.y - n.y); if (d < nd) { nd = d; near = pl; } }
+      if (near) { n.threat = { x: near.x, y: near.y }; if (!(n.fleeUntil > this.tick)) n.fleeDir = null; n.fleeUntil = this.tick + T(2 + this.rng() * 1.5); n.wgoal = null; }
     }
-    if (n.fleeTo && this.tick < n.fleeUntil) {
-      const prevA = n.anim, prevT = n.animT;
-      const r = this.walkTo(n, n.fleeTo.x, n.fleeTo.y, def.speed * 3.6, 600);
-      if (r === 'walk' && def.run) { if (prevA === 'run') { n.anim = 'run'; n.animT = prevT; } else this.setAnim(n, 'run'); }   // a deer bolts at a gallop
-      if (r !== 'walk') { n.fleeTo = null; n.wanderAt = this.tick + T(2); }
+    if (n.fleeUntil > this.tick && n.threat) {
+      // pick the best way to run: far from the threat, a long clear run, not too far from home,
+      // never into town, and not a sudden about-turn
+      if (!n.fleeDir || this.tick >= n.fleeRepick) {
+        const ax = n.x - n.threat.x, ay = n.y - n.threat.y, ad = Math.hypot(ax, ay) || 1;
+        let best = null, bs = -Infinity;
+        for (let k = 0; k < 16; k++) {
+          const a = k * Math.PI / 8, ux = Math.cos(a), uy = Math.sin(a), clear = wildRay(nav, n.x, n.y, ux, uy, 6);
+          const hx = n.x + ux * clear, hy = n.y + uy * clear;
+          let sc = (ux * ax + uy * ay) / ad * 3 + clear * 0.8 - Math.max(0, Math.hypot(hx - n.origin.x, hy - n.origin.y) - 20) * 0.7;
+          if (n.fleeDir) sc += (ux * n.fleeDir.x + uy * n.fleeDir.y) * 0.8;
+          if (clear < 0.75) sc -= 12;
+          if (inTown(hx, hy)) sc -= 30;
+          if (sc > bs) { bs = sc; best = { x: ux, y: uy }; }
+        }
+        n.fleeDir = best; n.fleeRepick = this.tick + T(0.4);
+      }
+      const ran = wildStep(nav, n, n.x + n.fleeDir.x * 3, n.y + n.fleeDir.y * 3, (def.fleeSpeed || def.speed * 3.6) / TICK_RATE);
+      if (!ran) n.fleeRepick = this.tick;
+      this.setAnim(n, ran ? (def.run ? 'run' : 'walk') : 'idle');
+      if (!(n.fleeUntil > this.tick + 1)) n.wanderAt = this.tick + T(1.5 + this.rng() * 2);
       return;
     }
-    n.fleeTo = null;
-    if (n.goal) { const r = this.walkTo(n, n.goal.x, n.goal.y, def.speed, 600); if (r !== 'walk') { this.stopWalking(n); this.setAnim(n, 'idle'); } return; }
-    if (this.tick >= (n.wanderAt || 0)) {
-      n.wanderAt = this.tick + T(5 + this.rng() * 9);
-      const a = this.rng() * Math.PI * 2, d = 1.5 + this.rng() * 4, tx = n.origin.x + Math.cos(a) * d, ty = n.origin.y + Math.sin(a) * d;
-      if (!isBlocked(this.map, Math.floor(tx), Math.floor(ty))) this.walkTo(n, tx, ty, def.speed, 600);
+    n.threat = null;
+    // calm: amble to another patch now and then (back toward home if it has strayed)
+    if (!n.wgoal && this.tick >= (n.wanderAt || 0)) {
+      const far = Math.hypot(n.x - n.origin.x, n.y - n.origin.y) > 9;
+      for (let k = 0; k < 12 && !n.wgoal; k++) {
+        const c = far ? n.origin : n, a = this.rng() * Math.PI * 2, d = (far ? 0.5 : 2) + this.rng() * 4.5;
+        const tx = c.x + Math.cos(a) * d, ty = c.y + Math.sin(a) * d;
+        if (wildFree(nav, tx, ty) && !inTown(tx, ty) && Math.hypot(tx - n.origin.x, ty - n.origin.y) < 14) n.wgoal = { x: tx, y: ty };
+      }
+      if (!n.wgoal) n.wanderAt = this.tick + T(2);
     }
+    if (n.wgoal) {
+      const r = wildGo(this, nav, n, n.wgoal.x, n.wgoal.y, def.speed / TICK_RATE);
+      if (r === 'walk') { this.setAnim(n, 'walk'); return; }
+      n.wgoal = null; n.wanderAt = this.tick + T(4 + this.rng() * 9);   // graze a while
+    }
+    this.setAnim(n, 'idle');
   },
   // someone on the road: walks one way, rests a while at the far end, walks back
   updateTraveller(n, def) {
@@ -77,8 +104,29 @@ export const poiMethods = {
     if (this.tick < (n.pauseUntil || 0)) { if (n.anim !== 'idle') this.setAnim(n, 'idle'); return; }
     const to = n.trip[n.leg], r = this.walkTo(n, to.x, to.y, def.speed, 9000);
     if (r === 'walk') return;
-    if (r === 'stuck') { n.x = to.x; n.y = to.y; this.stopWalking(n); }
+    if (r === 'stuck') this.stopWalking(n);   // can't get through: turn back (never pop across the map)
     n.leg = 1 - n.leg; n.pauseUntil = this.tick + T(25 + this.rng() * 35); this.setAnim(n, 'idle');
+  },
+
+  // ---------------------------------------------------------------- Frostridge's own snow
+  // Walking onto the ridge brings snow down for you and your party (party members who arrive while
+  // it falls share it). It falls for 5 to 8 minutes and then the sky over the ridge clears; walk onto
+  // the ridge again after that for another fall. Nobody else sees it, and the valley's own snow
+  // (world.weather) never reaches the ridge (the client keeps it off).
+  ridgeSnowKey(p) { return p.partyId != null ? `pt${p.partyId}` : `p${p.id}`; },
+  ridgeSnow(p) {
+    const sf = this.snowfalls || (this.snowfalls = new Map()), key = this.ridgeSnowKey(p), cur = sf.get(key);
+    if (cur && this.tick < cur.until + T(60)) return;          // still snowing for you (or only just stopped)
+    sf.set(key, { until: this.tick + T(300 + this.rng() * 180) });
+    const party = this.partyOf(p);
+    for (const m of party ? this.partyMembersOnline(party) : [p]) if (m.region === 'frostridge') this.privateEvent(m, { e: 'sys', text: 'Snow begins to fall over Frostridge.' });
+  },
+  // is it snowing on the ridge for this hero?
+  ridgeSnowing(p) {
+    const sf = this.snowfalls; if (!sf || !sf.size) return false;
+    const a = sf.get(this.ridgeSnowKey(p)), b = sf.get(`p${p.id}`);
+    if (this.tick % 600 === 0) for (const [k, v] of sf) if (this.tick > v.until + T(120)) sf.delete(k);
+    return !!((a && this.tick < a.until) || (b && this.tick < b.until));
   },
 
   poiUse(p, st) {
