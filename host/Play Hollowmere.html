@@ -1305,6 +1305,17 @@ textarea.mail-paper { outline: none; }
 #mm-mail:not([hidden]) { animation: mailPulse 1.6s ease-in-out infinite; }
 @keyframes mailPulse { 0%, 100% { filter: drop-shadow(0 2px 3px rgba(0,0,0,.7)); } 50% { filter: drop-shadow(0 0 9px rgba(255,214,110,.95)); } }
 #mm-mail[hidden] { display: none !important; }
+
+/* buying back what you sold */
+#shop-buyback { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(168,138,79,.35); }
+#shop-buyback .bb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; font-family: var(--display); color: var(--gold); }
+#shop-buyback .bb-head span { font-family: Georgia, serif; text-transform: none; letter-spacing: 0; font-weight: 400; }
+#shop-buyback .bb-row { display: flex; flex-wrap: wrap; gap: 4px; }
+#shop-buyback .slot { width: 40px; height: 40px; }
+#shop-buyback .slot .qty { font-size: 10px; }
+
+#panel-shop { max-height: calc(100vh - 150px); overflow-y: auto; }
+#shop-buyback { margin: 0 0 10px; padding: 0 0 8px; border-top: 0; border-bottom: 1px solid rgba(168,138,79,.35); }
 </style>
 </head>
 <body>
@@ -1474,6 +1485,7 @@ textarea.mail-paper { outline: none; }
 
     <section id="panel-shop" class="panel frame" hidden>
       <header><h3 id="shop-name">Shop</h3><button class="x" data-close="panel-shop">×</button></header>
+      <div id="shop-buyback" hidden></div>
       <div id="shop-list"></div>
       <p class="dim small">Right-click items in your pack to sell them.</p>
     </section>

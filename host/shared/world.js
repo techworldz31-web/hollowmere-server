@@ -1908,6 +1908,10 @@ export class World {
     if (!near) return this.privateEvent(p, { e: 'sys', text: 'Stand next to a trader, shopkeeper or townsperson to sell.' });
     const price = sellPrice(it);
     p.gold += price;
+    // sold by mistake? the last dozen things you sold can be bought back for what you got
+    (p.buyback ||= []).push({ item: it.item, qty: 1, ...(it.r ? { r: it.r } : {}), ...(it.b ? { b: it.b } : {}), price });
+    if (p.buyback.length > 12) p.buyback.shift();
+    this.privateEvent(p, { e: 'buyback', list: p.buyback });
     if (--it.qty <= 0) p.inv[slot] = null;
     p.selfDirty = true;
     this.privateEvent(p, { e: 'gold', v: price });
@@ -1924,6 +1928,17 @@ export class World {
       p.gold -= sp.price; p.selfDirty = true;
       this.privateEvent(p, { e: 'gold', v: -sp.price });
       return this.privateEvent(p, { e: 'loot', text: `Bought ${itemName(sp)}.`, r: sp.r });
+    }
+    if (item.startsWith('bb:')) {
+      const i = Number(item.slice(3)), bb = p.buyback?.[i];
+      if (!bb) return;
+      if (p.gold < bb.price) return this.privateEvent(p, { e: 'sys', text: 'Not enough gold.' });
+      if (!this.roomFor(p, bb.item, 1)) return this.privateEvent(p, { e: 'sys', text: 'Your pack is full.' });
+      this.addItem(p, bb.item, 1, bb.r || 0, bb.b || null);
+      p.gold -= bb.price; p.selfDirty = true; p.buyback.splice(i, 1);
+      this.privateEvent(p, { e: 'gold', v: -bb.price });
+      this.privateEvent(p, { e: 'buyback', list: p.buyback });
+      return this.privateEvent(p, { e: 'sys', text: `Bought back ${itemName(bb)}.` });
     }
     if (!NPCS[n.kind].stock.includes(item)) return;
     const price = buyPrice(item);
@@ -2058,7 +2073,7 @@ export class World {
     if (choice === 'shop' && role === 'shop') {
       const stock = NPCS[n.kind].stock.map((item) => ({ item, price: buyPrice(item) }));
       (n.special || []).forEach((sp, i) => stock.push({ item: sp.item, r: sp.r, price: sp.price, id: 'sp:' + i }));
-      return this.send(p.clientId, { t: S2C.SHOP, npc: n.id, name: NPCS[n.kind].name, stock });
+      return this.send(p.clientId, { t: S2C.SHOP, npc: n.id, name: NPCS[n.kind].name, stock, buyback: p.buyback || [] });
     }
     if (choice === 'craft' && role === 'craft') return this.send(p.clientId, { t: S2C.CRAFT, npc: n.id, name: NPCS[n.kind].name, at: 'forge' });
     if (choice === 'brew' && NPCS[n.kind].brew) return this.send(p.clientId, { t: S2C.CRAFT, npc: n.id, name: NPCS[n.kind].name, at: 'brew' });
