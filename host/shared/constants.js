@@ -40,7 +40,7 @@ export const MAP_W = 192;
 export const MAP_H = 192;
 export const MAP_VERSION = 5;          // bump when the overworld layout changes (saved positions are then reset to town)
 
-export const MAX_PLAYERS = 32;
+export const MAX_PLAYERS = 600;
 
 export const TERRAIN = { WATER: 0, SAND: 1, DIRT: 2, GRASS: 3, FOREST: 4, STONE: 5, CAVE: 6, CRYPT: 7, VOID: 8, WOOD: 9, TILE: 10, FARM: 11 };
 // ground heights: a plateau step is this many height units (1 unit = one tile's width of height)
