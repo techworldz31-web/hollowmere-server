@@ -30,13 +30,14 @@ const RARE_BY = Object.fromEntries(RARES.map((r) => [r.id, r]));
 export function zonesOf(map) {
   const L = map.landmarks, Z = [
     { id: 'town', name: 'Hollowmere', sub: 'The town by the lake', x: (TOWN.x0 + TOWN.x1) / 2, y: (TOWN.y0 + TOWN.y1) / 2, r: 24 },
-    { id: 'meadow', name: 'Slime Meadow', sub: 'Levels 1-3', ...L.meadow, r: 16 },
+    { id: 'meadow', name: 'Slime Meadow', sub: 'Levels 5-6', ...L.meadow, r: 16 },
     { id: 'lake', name: 'Mirror Lake', sub: 'Old Tobin fishes here', ...L.lake, r: 22 },
-    { id: 'camp', name: "Grukk's War Camp", sub: 'Levels 4-6', ...L.camp, r: 15 },
+    { id: 'camp', name: "Grukk's War Camp", sub: 'Levels 6-7', ...L.camp, r: 15 },
     { id: 'deep', name: 'The Hollow Deep', sub: 'A cave mouth into the dark', ...L.cave, r: 6 },
   ];
   for (const [id, R] of Object.entries(REGIONS)) Z.push({ id, name: R.name, sub: `Levels ${R.levels}`, x: R.x, y: R.y, r: R.r * 0.8 });
   for (const [id, s] of Object.entries(map.spots || {})) if (SPOT_NAMES[id]) Z.push({ id, name: SPOT_NAMES[id].replace(/^the /, '').replace(/^./, (c) => c.toUpperCase()), sub: 'A landmark', x: s.x, y: s.y, r: 7 });
+  for (const P of map.pois || []) Z.push({ id: P.id, name: P.name, sub: 'A place off the road', x: P.x, y: P.y, r: 4.5, poi: true });
   return Z;
 }
 
@@ -54,6 +55,7 @@ export const ACHIEVEMENTS = [
   { id: 'lv15', name: 'Veteran', desc: 'Reach level 15', pts: 15, need: (p) => [p.level, 15] },
   { id: 'lv20', name: 'Hero of Hollowmere', desc: 'Reach level 20', pts: 25, need: (p) => [p.level, 20] },
   { id: 'wanderer', name: 'Wanderer', desc: 'Discover 5 places', pts: 10, need: (p, s) => [s.disc.length, 5] },
+  { id: 'off_path', name: 'Off the Beaten Path', desc: 'Find every camp, shrine and ruin off the road', pts: 20, need: (p, s, w) => [s.disc.filter((id) => id.startsWith('poi_')).length, w.map.pois?.length || 10] },
   { id: 'cartographer', name: 'Cartographer', desc: 'Discover every place in the world', pts: 25, need: (p, s, w) => [s.disc.length, w.zoneList.length] },
   { id: 'rare_1', name: 'Something Rare', desc: 'Defeat a rare monster', pts: 10, need: (p, s) => [s.rares.length, 1] },
   { id: 'rare_5', name: 'Rare Hunter', desc: 'Defeat 5 different rare monsters', pts: 20, need: (p, s) => [s.rares.length, 5] },
@@ -84,7 +86,7 @@ function dailyKinds(level, avail) {
 const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 
 export function freshProg() {
-  return { ach: {}, stats: { kills: 0, chests: 0, dailies: 0, restedUsed: 0, rares: [], disc: [] }, rested: 0, lastSeen: Date.now(), daily: null };
+  return { ach: {}, stats: { kills: 0, chests: 0, dailies: 0, restedUsed: 0, rares: [], disc: [], caches: [] }, rested: 0, lastSeen: Date.now(), daily: null };
 }
 
 export const progressMethods = {
@@ -104,6 +106,7 @@ export const progressMethods = {
       const st = v.stats || {};
       for (const k of ['kills', 'chests', 'dailies', 'restedUsed']) if (Number.isInteger(st[k]) && st[k] >= 0) P.stats[k] = st[k];
       if (Array.isArray(st.rares)) P.stats.rares = st.rares.filter((id) => RARE_BY[id]);
+      if (Array.isArray(st.caches)) P.stats.caches = st.caches.filter((id) => typeof id === 'string' && id.startsWith('poi_')).slice(0, 20);
       if (Array.isArray(st.disc)) P.stats.disc = st.disc.filter((id) => typeof id === 'string' && id.length < 40).slice(0, 80);
       if (typeof v.rested === 'number' && v.rested >= 0) P.rested = v.rested;
       if (typeof v.lastSeen === 'number') P.lastSeen = v.lastSeen;

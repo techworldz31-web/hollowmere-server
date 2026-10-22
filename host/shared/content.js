@@ -508,6 +508,18 @@ Object.assign(NPCS, {
   campfire:     { name: 'Camp Fire', sprite: null, role: 'station', station: 'cook' },
   workbench:    { name: 'Workbench', sprite: null, role: 'station', station: 'craft' },
   waystone:     { name: 'Waystone', sprite: null, role: 'station', station: 'waystone' },
+  // the places off the road (shared/mapgen.js, shared/world_pois.js)
+  poi_note:     { name: 'A Weathered Note', sprite: null, role: 'station', station: 'poi' },
+  poi_shrine:   { name: 'Wayside Shrine', sprite: null, role: 'station', station: 'poi' },
+  poi_cache:    { name: 'Fallen Rubble', sprite: null, role: 'station', station: 'poi' },
+  // life between the towns (world_pois.js): animals that bolt when you come close, people on the roads
+  ...Object.fromEntries([1, 2, 3, 4, 5, 6].map((i) => [`wild_fox_${i}`, { name: 'Red Fox', sprite: 'pet_fox', role: 'wild', noName: true, speed: 1.1, flee: 4.5, lines: ['The fox watches you, ready to bolt.'] }])),
+  ...Object.fromEntries([1, 2, 3, 4].map((i) => [`wild_horse_${i}`, { name: 'Wild Horse', sprite: 'horse', role: 'wild', noName: true, speed: 0.9, flee: 5.5, lines: ['The horse snorts and tosses its mane.'] }])),
+  ...Object.fromEntries([1, 2, 3, 4].map((i) => [`traveller_${i}`, { name: ['A Traveller', 'A Pilgrim', 'A Pedlar', 'A Courier'][i - 1], sprite: `folk_${(i + 2) % 4}`, role: 'traveller', speed: 1.2,
+    lines: [['Long road. Good road, though. Mind the wolves past the ford.'], ['I walk to the shrines and back, every season. Have you knelt at one? You should.'], ['Needles, thread, a good knife? No? Suit yourself.'], ['Can\'t stop, letters for Thornwick! Well, I can stop a moment.']][i - 1] }])),
+  road_cart:    { name: 'Supply Cart', sprite: 'horsecart', role: 'traveller', noName: true, speed: 1.3, big: true, lines: ['The carter tips his hat: "Flour and nails for Thornwick, same as every week."'] },
+  fisher_hesk:  { name: 'Old Hesk the Fisherman', sprite: 'trader_tackle', role: 'folk',
+    lines: ['Forty years I\'ve fished this lake. The big ones only bite at dawn, and only if you don\'t look at them.', 'Tobin? Tobin couldn\'t catch a cold. Don\'t tell him I said so.', 'Rain\'s the best time. The fish come up to see what all the fuss is.', 'There\'s something big in the deep middle. Took my best rod, line and all.'] },
   ...Object.fromEntries([1, 2, 3, 4].map((i) => [`visitor_${i}`, { name: ['A Traveller', 'A Pilgrim', 'A Pedlar', 'A Farmhand'][i - 1], sprite: `folk_${(i + 1) % 4}`, role: 'folk', wander: true, visitor: true,
     lines: [['Lovely town. Busy, though.'], ['I walked two days for this market. My feet would like a word.'], ['Have you seen the spice stall? My nose has.'], ['I came for the apples. I am staying for the pie.']][i - 1] }])),
 });

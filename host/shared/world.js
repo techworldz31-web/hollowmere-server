@@ -27,6 +27,7 @@ import { progressMethods, freshProg } from './world_progress.js';
 import { socialMethods } from './world_social.js';
 import { tutorialMethods } from './world_tutorial.js';
 import { bossMethods } from './world_bosses.js';
+import { poiMethods } from './world_pois.js';
 import { swapMethods } from './world_trade.js';
 import { specMethods } from './world_specs.js';
 import { SPECS, skillList } from './specs.js';
@@ -79,7 +80,8 @@ export class World {
     this.newEnt({ type: 'portal', kind: 'cave', x: cave.x, y: cave.y, zone: 'world', name: 'The Hollow Deep' });
     // herbs, ore veins and trees to chop; the hearth and the camp fire to cook at
     for (const n of this.map.nodes) this.newEnt({ type: 'node', kind: n.kind, x: n.x, y: n.y, name: NODES[n.kind].name, dep: 0 });
-    for (const st of this.map.stations) this.newEnt({ type: 'station', kind: st.kind, x: st.x, y: st.y, name: NPCS[st.kind].name, ...(st.stone ? { stone: st.stone } : {}) });
+    for (const st of this.map.stations) this.newEnt({ type: 'station', kind: st.kind, x: st.x, y: st.y, name: NPCS[st.kind].name, ...(st.stone ? { stone: st.stone } : {}), ...(st.poi ? { poi: st.poi } : {}) });
+    this.spawnWilds();               // foxes, wild horses and travellers on the roads (world_pois.js)
     this.day = 0;                    // counts whole days since the world started (market every 3rd, festival every 7th)
     this.town = { market: false, festival: false, raid: null, raidDay: -1, contest: null, ents: {} };
     this.initFarming();
@@ -470,7 +472,7 @@ export class World {
       for (const k of ['meal', 'elixir']) { const b = p.buffs[k]; if (b && b.until > this.tick) bfx[k] = { k: b.kind, until: b.until }; }
       snap.self.bfx = bfx; snap.self.binfo = binfo;
       snap.self.tut = this.tutView(p);
-      if (p.prog) snap.self.prog = { rested: Math.round(p.prog.rested), daily: p.prog.daily, ach: Object.keys(p.prog.ach), disc: p.prog.stats.disc.length, discN: this.zoneList?.length || 0, rares: p.prog.stats.rares, kills: p.prog.stats.kills };
+      if (p.prog) snap.self.prog = { rested: Math.round(p.prog.rested), daily: p.prog.daily, ach: Object.keys(p.prog.ach), disc: p.prog.stats.disc.length, discN: this.zoneList?.length || 0, found: p.prog.stats.disc.filter((id) => id.startsWith('poi_')), rares: p.prog.stats.rares, kills: p.prog.stats.kills };
       if (p.prog && this.tick - (p.achvSent || -1e9) > T(4)) { p.achvSent = this.tick; snap.self.prog.achv = this.achView(p); }
     }
     return snap;
@@ -709,6 +711,7 @@ export class World {
         else if (t.type === 'portal') this.usePortal(p, t);
         else if (t.type === 'node') { this.dismount(p, true); this.startGather(p, t); }
         else if (t.type === 'crop') { this.dismount(p, true); this.farmInteract(p, t); }
+        else if (t.type === 'station' && t.poi) this.poiUse(p, t);
         else if (t.type === 'station' && t.kind === 'waystone') { p.dir = dirFromVector(t.x - p.x, t.y - p.y); this.stoneMenu(p, t); }
         else if (t.type === 'station') { this.dismount(p, true); p.dir = dirFromVector(t.x - p.x, t.y - p.y); this.send(p.clientId, { t: S2C.CRAFT, npc: t.id, name: t.name, at: NPCS[t.kind].station || 'cook' }); }
         if (p.zone !== t.zone) return;   // went through a portal
@@ -1504,6 +1507,8 @@ export class World {
     if (def.role === 'critter') return this.updateCritter(n, def);
     if (def.wander) return this.updateFolk(n, def);
     if (def.role === 'isle') return this.isleIdle(n);
+    if (def.role === 'wild') return this.updateWild(n, def);
+    if (def.role === 'traveller') return this.updateTraveller(n, def);
     if (n.facingUntil && this.tick > n.facingUntil) { n.dir = n.homeDir; n.facingUntil = 0; }
   }
 
@@ -2078,4 +2083,4 @@ export class World {
 }
 
 // trades (fishing, gathering, cooking) and town events live in their own files
-Object.assign(World.prototype, tradeMethods, townMethods, farmMethods, questMethods, travelMethods, specMethods, partyMethods, swapMethods, progressMethods, socialMethods, tutorialMethods, bossMethods);
+Object.assign(World.prototype, tradeMethods, townMethods, farmMethods, questMethods, travelMethods, specMethods, partyMethods, swapMethods, progressMethods, socialMethods, tutorialMethods, bossMethods, poiMethods);

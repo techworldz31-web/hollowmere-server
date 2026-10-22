@@ -27,6 +27,20 @@ export const TOWN = {
   clerks: [90, 93, 96, 99, 102],                  // teller windows (x), clerks stand behind the counter
 };
 
+// the places off the road (see "places off the road" below); x, y is roughly where each goes
+export const POI_DEFS = [
+  { id: 'poi_pilgrims', kind: 'camp', name: "Pilgrims' Rest", x: 70, y: 60, lv: 5 },
+  { id: 'poi_trapper', kind: 'camp', name: "Abandoned Trapper's Camp", x: 22, y: 126, lv: 8 },
+  { id: 'poi_patrol', kind: 'camp', name: 'Deserted Patrol Camp', x: 40, y: 78, lv: 12 },
+  { id: 'poi_green_lady', kind: 'shrine', name: 'Shrine of the Green Lady', x: 120, y: 165, lv: 5 },
+  { id: 'poi_mossy', kind: 'shrine', name: 'Mossy Shrine', x: 52, y: 132, lv: 8 },
+  { id: 'poi_north_wind', kind: 'shrine', name: 'Shrine of the North Wind', x: 130, y: 22, lv: 15 },
+  { id: 'poi_drowned', kind: 'shrine', name: 'Drowned Shrine', x: 176, y: 140, lv: 18 },
+  { id: 'poi_hut', kind: 'hut', name: "Fisherman's Hut", x: 54, y: 46, lv: 5 },
+  { id: 'poi_tower', kind: 'ruin', name: 'Collapsed Watchtower', x: 12, y: 104, lv: 12 },
+  { id: 'poi_frozen_ruin', kind: 'ruin', name: 'Frozen Ruin', x: 172, y: 40, lv: 16 },
+];
+
 export function generateMap(seed = WORLD_SEED) {
   const W = MAP_W, H = MAP_H;
   const rand = mulberry32(seed);
@@ -941,8 +955,54 @@ export function generateMap(seed = WORLD_SEED) {
   placeStone('hermitage', spots.hermitage.x + 3, spots.hermitage.y + 2);
   placeStone('fenwatch', spots.fenwatch.x + 3, spots.fenwatch.y - 3);
 
+  // ---- places off the road: abandoned camps with a note left behind, wayside shrines that
+  // bless whoever kneels, a fisherman's hut on the lake, ruins with something still in them.
+  // Each goes in the nearest open clearing to its spot. (World, server and client all build the
+  // same ones from the seed.)
+  const pois = [];
+  const clearAt = (tx, ty, r) => {
+    for (let y = ty - r; y <= ty + r; y++) for (let x = tx - r; x <= tx + r; x++) {
+      const k = idx(x, y);
+      if (!inside(x, y) || occupied[k] || solid[k] || reserved[k] || terrain[k] === TERRAIN.WATER || terrain[k] === TERRAIN.STONE) return false;
+    }
+    return true;
+  };
+  const findClear = (ax, ay, r, wet) => {
+    for (let d = 0; d <= 18; d++) for (let oy = -d; oy <= d; oy++) for (let ox = -d; ox <= d; ox++) {
+      if (Math.max(Math.abs(ox), Math.abs(oy)) !== d) continue;
+      const tx = Math.floor(ax) + ox, ty = Math.floor(ay) + oy;
+      if (!clearAt(tx, ty, r)) continue;
+      if (wet) { let near = false; for (let dy = -6; dy <= 6 && !near; dy++) for (let dx = -6; dx <= 6; dx++) if (Math.hypot(dx, dy) > r + 1 && inside(tx + dx, ty + dy) && terrain[idx(tx + dx, ty + dy)] === TERRAIN.WATER) { near = true; break; } if (!near) continue; }
+      return { x: tx, y: ty };
+    }
+    return null;
+  };
+  const put1 = (k, x, y, v = 0) => { if (canPlace(k, x, y, true)) place(k, x, y, v); };
+  for (const P of POI_DEFS) {
+    const at = findClear(P.x, P.y, 2, P.kind === 'hut');
+    if (!at) continue;
+    const { x, y } = at, poi = { id: P.id, kind: P.kind, name: P.name, x: x + 0.5, y: y + 0.5 };
+    if (P.kind === 'camp') {
+      put1('tent', x - 2, y - 2); put1('logs', x + 1, y + 1); put1('rockpile', x - 2, y + 1); put1('crate', x + 2, y - 1); put1('bones', x - 1, y + 2, 1);
+      put1('campboard', x, y - 1, (x + y) % 4); poi.at = { x: x + 0.5, y: y - 0.5 };
+    } else if (P.kind === 'shrine') {
+      put1('shrine', x, y - 1); put1('candles', x - 1, y + 1); put1('candles', x + 2, y + 1); put1('flowers', x + 2, y - 1, 1); put1('flowers', x - 1, y - 1, 2);
+      poi.at = { x: x + 1, y: y + 0.6 };
+    } else if (P.kind === 'hut') {
+      put1('house_small', x - 1, y - 2); put1('crate', x + 2, y + 1); put1('barrel', x + 2, y + 2); put1('logs', x - 2, y + 2);
+      poi.npc = { x: x + 0.5, y: y + 2.5 };
+    } else if (P.kind === 'ruin') {
+      put1('pillar', x - 2, y - 2); put1('pillar', x + 2, y - 2); put1('stonewall_x', x - 1, y - 2); put1('rockpile', x + 1, y - 2); put1('rockpile', x - 2, y + 1);
+      put1('pillar', x + 2, y + 1); put1('bones', x + 1, y + 2, 0); put1('stonewall_y', x - 2, y);
+      poi.at = { x: x + 0.5, y: y + 0.5 };
+    }
+    pois.push(poi);
+  }
+  for (const P of pois) if (P.npc) npcs.push({ kind: 'fisher_hesk', ...P.npc, dir: 2 });
+
   // places to cook: the inn hearth and the goblins' camp fire
   const stations = [];
+  for (const P of pois) if (P.at) stations.push({ kind: P.kind === 'camp' ? 'poi_note' : P.kind === 'shrine' ? 'poi_shrine' : 'poi_cache', x: P.at.x, y: P.at.y, poi: P.id });
   for (const o of objects) {
     if (o.kind === 'inn_fireplace') stations.push({ kind: 'hearth', x: o.x, y: o.y });
     if (o.kind === 'campfire' && Math.hypot(o.x - C.x, o.y - C.y) < 3) stations.push({ kind: 'campfire', x: o.x, y: o.y });
@@ -1117,6 +1177,6 @@ export function generateMap(seed = WORLD_SEED) {
     bridges: [{ ...BRIDGE, axis: 'x', deck: 0.9 }],
     playerSpawn: { x: T.x + 0.5, y: T.y + 5.5 },
     landmarks: { village: T, lake: L, camp: C, meadow: S, cave: freeNear(C.x - 0.5, C.y - 6.5), bank: TOWN.bank },
-    buildings,
+    buildings, pois,
   };
 }
