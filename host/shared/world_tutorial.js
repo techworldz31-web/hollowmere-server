@@ -85,7 +85,7 @@ export const tutorialMethods = {
     this.spawnNpc('isle_lookout', A.lookout.x, A.lookout.y, 6, { zone: id });
     this.spawnNpc('isle_sailor1', A.sailor1.x, A.sailor1.y, 1, { zone: id });
     this.spawnNpc('isle_sailor2', A.sailor2.x, A.sailor2.y, 5, { zone: id });
-    this.newEnt({ type: 'portal', kind: 'ferry', x: A.ferry.x, y: A.ferry.y, zone: id, name: 'Ship to Hollowmere', reach: 4.6, dir: 2 });
+    this.newEnt({ type: 'portal', kind: 'ferry', x: A.ferry.x, y: A.ferry.y, zone: id, name: 'Ship to Hollowmere', reach: 4.6, dir: 4 });   // dir: her heading in 16ths of a turn (4 = along the dock, out to sea)
     // the island's monsters are this hero's alone, and don't come back once beaten
     for (const group of Object.values(map.starter.mobs)) for (const s of group) {
       const m = this.spawnMob(s.kind, s.x, s.y, id, { tutFor: p.id });
@@ -254,16 +254,24 @@ export const tutorialMethods = {
     if (!ship) return this.tutFinish(p, 'ferry');
     p.riding = true; p.path = null; p.moveDir = null; p.target = null; p.pending = null; p.selfDirty = true;
     // aboard: standing on her deck a little aft of the middle, looking over the bow
-    const DECK = -1.2;                                     // along her length from the middle (she points +y)
-    this.teleport(p, ship.x, ship.y + DECK); p.dir = dirFromVector(0, 1); this.setAnim(p, 'idle');
+    const DECK = -1.2;                                     // along her length from the middle
+    let th = Math.PI / 2;                                  // her heading: along the dock, bow to the sea (+y)
+    const aboard = () => { p.x = ship.x + Math.cos(th) * DECK; p.y = ship.y + Math.sin(th) * DECK; p.dir = dirFromVector(Math.cos(th), Math.sin(th)); };
+    this.teleport(p, ship.x, ship.y + DECK); aboard(); this.setAnim(p, 'idle');
     this.privateEvent(p, { e: 'ferryride', id: ship.id });
-    // she casts off and sails out bow first, gathering speed as the sails fill (moved every tick,
-    // the hero with her, so nothing jumps)
-    const dur = T(7), start = this.tick;
+    // she casts off and pulls straight out from the dock, then puts her helm over and comes round
+    // toward the open sea, gathering speed as the sails fill. Her bow always points where she's
+    // going (her picture turns with her, 16 headings), and the hero rides on her deck.
+    const dur = T(7.5), start = this.tick, TURN_TO = Math.PI * 0.75;
     const sail = () => {
       if (!this.ents.has(p.id) || p.zone !== ship.zone || !this.ents.has(ship.id)) return;
-      const k = (this.tick - start) / dur, v = (0.6 + 2.6 * Math.min(1, k)) / TICK_RATE;
-      ship.y += v; p.x = ship.x; p.y = ship.y + DECK; p.dir = dirFromVector(0, 1);
+      const t = (this.tick - start) / TICK_RATE, k = (this.tick - start) / dur;
+      const turn = Math.min(1, Math.max(0, (t - 1.6) / 3.2));                  // the turn, eased in and out
+      th = Math.PI / 2 + (TURN_TO - Math.PI / 2) * (turn * turn * (3 - 2 * turn));
+      const v = (0.6 + 2.4 * Math.min(1, k)) / TICK_RATE;
+      ship.x += Math.cos(th) * v; ship.y += Math.sin(th) * v;
+      ship.dir = ((Math.round(th / (Math.PI / 8)) % 16) + 16) % 16;
+      aboard();
       if (this.tick - start < dur) this.later(1 / TICK_RATE, sail);
       else { p.riding = false; this.tutFinish(p, 'ferry'); }
     };
