@@ -3,11 +3,11 @@
 // ground mesh the renderer draws, so feet stay on the drawn ground.
 export function groundAt(map, x, y, deck = true) {
   const H = map.height;
-  if (!H) return 0;
-  // walking over a bridge: its deck arches over the water
+  // walking over a bridge: its deck arches over the water (a dock's is flat)
   if (deck && map.bridges) for (const b of map.bridges) {
-    if (x >= b.x0 && x < b.x0 + b.w && y >= b.y0 && y < b.y0 + b.h) return b.deck * Math.sin(Math.PI * (x - b.x0) / b.w);
+    if (x >= b.x0 && x < b.x0 + b.w && y >= b.y0 && y < b.y0 + b.h) return b.flat ? b.deck : b.deck * Math.sin(Math.PI * (x - b.x0) / b.w);
   }
+  if (!H) return 0;
   const W1 = map.w + 1;
   if (x < 0) x = 0; else if (x > map.w - 1e-4) x = map.w - 1e-4;
   if (y < 0) y = 0; else if (y > map.h - 1e-4) y = map.h - 1e-4;

@@ -1,17 +1,17 @@
 // Tutorial Island: the starting island (levels 1-5). Every new hero gets their own copy (an
 // instance, like the Hollow Deep): nobody else can see them, or be seen, until they take the
-// ferry to Hollowmere. Like the other maps it is built from a seed, so the server sends one
+// ship to Hollowmere. Like the other maps it is built from a seed, so the server sends one
 // number and every client rebuilds the same island.
 //
 // The story: the hero's ship ran onto the rocks in a storm. They wake on the beach by the
 // wreck; the survivors have made camp inland under Captain Harlan. The isle has tide-pool
 // slimes, young wolves in the pinewood and a goblin scouting party camped on the north bluff.
-// The ferryman's boat at the jetty takes the hero across to Hollowmere.
+// Old Wyck's ship, moored at the dock, takes the hero across to Hollowmere.
 import { TERRAIN } from './constants.js';
 import { OBJECTS } from './content.js';
 import { mulberry32 } from './rng.js';
 
-export const STARTER_SIZE = 60;
+export const STARTER_SIZE = 76;     // the isle and a good stretch of sea round it (the ship sails off across it)
 export const STARTER_NAME = 'Tutorial Island';
 
 export function generateStarter(seed = 1) {
@@ -26,7 +26,7 @@ export function generateStarter(seed = 1) {
   const objects = [];
 
   // ---- the island's shape: a lumpy disc, wobbling a little with the seed -------------------
-  const C = { x: 30, y: 29 };
+  const C = { x: 38, y: 37 };
   const lumps = Array.from({ length: 6 }, (_, k) => ({ a: rand() * Math.PI * 2, f: k + 2, amp: 0.8 + rand() * 1.4 }));
   const radius = (a) => 22 + lumps.reduce((s, l) => s + Math.sin(a * l.f + l.a) * l.amp, 0) * 0.55;
   const edgeDist = (x, y) => radius(Math.atan2(y - C.y, x - C.x)) - Math.hypot(x - C.x, y - C.y);   // > 0 on land
@@ -50,8 +50,8 @@ export function generateStarter(seed = 1) {
     pools: along(E, 4.5),                // tide pools on the east shore: slimes
     woods: along(Wd, 9),                 // the pinewood, west: young wolves
     goblins: along(N, 7),                // the goblin scouts' camp on the north bluff
-    jetty: along(SW, 1.2),               // the ferry jetty on the south-west shore
-    ferry: along(SW, -5.2),
+    jetty: along(SW, 1.5),               // where the dock leaves the south-west shore (moved onto the dock below)
+    ferry: along(SW, -5.2),              // the ship (moved alongside the dock below)
     ferryman: along(SW + 0.12, 3.2),
     cook: { x: C.x - 1.5, y: C.y + 2 },  // Mira the ship's cook, across the fire from the captain
     cove: along(SE + 0.62, 3.6),         // the south beach where the ship's stores washed up: skitterers
@@ -73,22 +73,23 @@ export function generateStarter(seed = 1) {
     if (!solid[i] && Math.hypot(x - A.goblins.x, y - A.goblins.y) < 6.5) terrain[i] = TERRAIN.DIRT;
   }
 
-  // ---- the jetty: planks out over the water ---------------------------------------------------
+  // ---- the dock: a wooden pier out over the water, and the ship moored alongside it ------------
+  // It runs straight out to sea along +y (south-west on screen) from the beach, two tiles wide and
+  // ten long, most of it over the water; the ship lies along its outer side with her bow to the
+  // open sea, so when she sails she goes forward. The dock's planks are walkable all the way to
+  // the end (the water under them isn't).
+  const DOCK = { x0: Math.floor(A.jetty.x), y0: 0, w: 2, h: 10 };
+  { let wy = Math.floor(A.jetty.y); while (wy < H - 12 && !(terrain[idx(DOCK.x0, wy)] === TERRAIN.WATER && terrain[idx(DOCK.x0 + 1, wy)] === TERRAIN.WATER)) wy++; DOCK.y0 = wy - 3; }   // three tiles on the beach, seven over the water
+  for (let y = DOCK.y0; y < DOCK.y0 + DOCK.h; y++) for (let x = DOCK.x0; x < DOCK.x0 + DOCK.w; x++) if (inside(x, y)) solid[idx(x, y)] = 0;
+  A.jetty = { x: DOCK.x0 + 1, y: DOCK.y0 + 1.5 };                     // the landward end
+  A.dockEnd = { x: DOCK.x0 + 1, y: DOCK.y0 + DOCK.h - 0.6 };          // where you step aboard
   {
-    const n = Math.ceil(Math.hypot(A.ferry.x - A.jetty.x, A.ferry.y - A.jetty.y) * 2);
-    for (let k = 0; k <= n; k++) {
-      const t = k / n, X = A.jetty.x + (A.ferry.x - A.jetty.x) * t, Y = A.jetty.y + (A.ferry.y - A.jetty.y) * t;
-      for (const [ox, oy] of [[0, 0], [1, 0], [0, 1]]) {
-        const x = Math.floor(X) + ox, y = Math.floor(Y) + oy;
-        if (inside(x, y) && terrain[idx(x, y)] === TERRAIN.WATER) { terrain[idx(x, y)] = TERRAIN.WOOD; solid[idx(x, y)] = 0; }
-      }
-    }
+    // the ship: alongside the dock's outer side, all of her hull over open water
+    const sx = DOCK.x0 - 1.9, hull = (y) => { for (let k = -4.2; k <= 4.4; k += 0.5) for (const ox of [-1, 0, 1]) { const X = Math.floor(sx + ox), Y = Math.floor(y + k); if (!inside(X, Y) || terrain[idx(X, Y)] !== TERRAIN.WATER) return false; } return true; };
+    let sy = DOCK.y0 + DOCK.h - 3.5;
+    while (!hull(sy) && sy < DOCK.y0 + DOCK.h + 6) sy += 0.5;
+    A.ferry = { x: sx, y: sy };
   }
-  for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
-    const x = Math.floor(A.ferry.x) + dx, y = Math.floor(A.ferry.y) + dy;
-    if (inside(x, y) && terrain[idx(x, y)] === TERRAIN.WATER) { terrain[idx(x, y)] = TERRAIN.WOOD; solid[idx(x, y)] = 0; }
-  }
-
   // ---- paths between the places (dirt, two tiles wide) ----------------------------------------
   const path = (a, b) => {
     const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) * 2);
@@ -106,7 +107,8 @@ export function generateStarter(seed = 1) {
   path(A.spawn, A.camp); path(A.camp, A.pools); path(A.camp, A.woods); path(A.woods, A.goblins); path(A.camp, A.goblins); path(A.camp, A.jetty); path(A.camp, A.cove); path(A.woods, A.den);
   // the camps themselves are open ground round the fire, not a crossroads
   for (const c of [A.camp, A.goblins]) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (Math.hypot(x + 0.5 - c.x, y + 0.5 - c.y) < 2.6) pathMask[idx(x, y)] = 0;
-  const onPath = (x, y) => pathMask[idx(x, y)] === 1 || terrain[idx(x, y)] === TERRAIN.WOOD;
+  const inDock = (x, y) => x >= DOCK.x0 && x < DOCK.x0 + DOCK.w && y >= DOCK.y0 && y < DOCK.y0 + DOCK.h;
+  const onPath = (x, y) => pathMask[idx(x, y)] === 1 || terrain[idx(x, y)] === TERRAIN.WOOD || inDock(x, y);
 
   // ---- placing things ------------------------------------------------------------------------
   let force = false;     // camp furniture may stand on the trampled ground the walkways start from
@@ -169,9 +171,11 @@ export function generateStarter(seed = 1) {
   const gx = Math.floor(A.goblins.x), gy = Math.floor(A.goblins.y);
   place('campfire', gx, gy); place('tent', gx - 4, gy - 3); place('tent', gx + 2, gy - 4);
   for (const [x, y, k] of [[gx + 3, gy + 1, 'crate'], [gx + 4, gy + 1, 'crate'], [gx - 3, gy + 2, 'cart'], [gx - 4, gy, 'rockpile'], [gx + 1, gy + 3, 'logs'], [gx - 1, gy - 4, 'banner']]) place(k, x, y);
-  // the jetty: the ferryman's lamp and his crates
-  place('lamp', Math.floor(A.jetty.x) + 2, Math.floor(A.jetty.y) - 1); place('crate', Math.floor(A.jetty.x) + 3, Math.floor(A.jetty.y));
-  place('barrel', Math.floor(A.jetty.x) + 3, Math.floor(A.jetty.y) + 1);
+  objects.push({ kind: 'dock', tx: DOCK.x0, ty: DOCK.y0, x: DOCK.x0 + 1, y: DOCK.y0 + DOCK.h / 2, sprite: 'dock' });
+  for (let y = DOCK.y0; y < DOCK.y0 + DOCK.h; y++) for (let x = DOCK.x0; x < DOCK.x0 + DOCK.w; x++) if (inside(x, y)) occupied[idx(x, y)] = 1;
+  // the dock: Old Wyck's lamp and his crates by its landward end
+  place('lamp', DOCK.x0 + 2, DOCK.y0 - 1); place('crate', DOCK.x0 + 3, DOCK.y0);
+  place('barrel', DOCK.x0 + 3, DOCK.y0 + 1);
 
   force = false;
   // trees: thick in the pinewood, scattered elsewhere; rocks and shells on the beach; flowers
@@ -231,12 +235,12 @@ export function generateStarter(seed = 1) {
 
   return {
     seed, w: W, h: H, terrain, solid, objects, spawns: [], npcs: [], playerSpawn: A.spawn, slow: null,
-    landmarks: {}, indoor: false, starter: { name: STARTER_NAME, areas: A, mobs: spawns },
+    landmarks: {}, indoor: false, bridges: [{ ...DOCK, deck: 0.12, flat: true }], starter: { name: STARTER_NAME, areas: A, mobs: spawns },
   };
 }
 
 // the named parts of the isle, for the place name over the minimap
 export const STARTER_AREAS = [
   ['The Wreck', 'spawn', 6], ["Survivors' Camp", 'camp', 8], ['The Tide Pools', 'pools', 6], ['The Pinewood', 'woods', 10],
-  ["Goblin Scouts' Bluff", 'goblins', 8], ['Skitterer Cove', 'cove', 5], ["The Wolves' Den", 'den', 5], ["Ferryman's Jetty", 'jetty', 6],
+  ["Goblin Scouts' Bluff", 'goblins', 8], ['Skitterer Cove', 'cove', 5], ["The Wolves' Den", 'den', 5], ["Wyck's Dock", 'jetty', 6],
 ];

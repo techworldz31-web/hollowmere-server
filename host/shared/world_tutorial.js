@@ -1,6 +1,6 @@
 // The guided start on Tutorial Island, levels 1 to 5. Every new hero gets their own copy of the
 // island (an instance, like a Hollow Deep floor): nobody else can see them, or be seen, until
-// they take the ferry to Hollowmere. Finishing the guide, or skipping it at any point, brings
+// they take the ship to Hollowmere. Finishing the guide, or skipping it at any point, brings
 // them to the town square in the shared world.
 // Installed onto World's prototype (see the bottom of world.js).
 //
@@ -16,7 +16,7 @@ import { generateStarter } from './starter.js';
 const T = (s) => Math.round(s * TICK_RATE);
 // Each step: what the panel says, and how it ends: `npc` (talk to them), `goal` [monster, how
 // many, label] (with `area` for the arrow when none are in sight, `lvl` reached on finishing and
-// `done` said then), or its own rule in tutorialTick. About ten minutes from beach to ferry.
+// `done` said then), or its own rule in tutorialTick. About ten minutes from beach to ship.
 export const TUT_STEPS = [
   { id: 'intro', title: 'Tutorial Island', text: '' },
   { id: 'wake', title: 'Find the Survivors', text: 'You washed up by the wreck. Smoke is rising inland: the survivors have made camp. Walk there: click on the ground, or use W A S D.', npc: 'isle_captain' },
@@ -33,7 +33,7 @@ export const TUT_STEPS = [
   { id: 'scouts', title: 'Goblin Scouts', text: 'Goblin scouts are camped on the north bluff. Thin out their numbers before you face their leader.', goal: ['goblin_scout', 5, 'Goblin scouts'], area: 'goblins', done: 'The scouts are scattered. Snikt is all that\'s left.' },
   { id: 'snikt', title: 'Snikt the Scout Leader', text: 'Defeat Snikt, the leader of the goblin scouts. He is tougher than anything on the isle: use everything you have learned.', goal: ['scout_leader', 1, 'Snikt defeated'], area: 'goblins', done: 'Snikt is beaten! Report back to Captain Harlan.' },
   { id: 'report', title: 'Report to the Captain', text: 'Go back to Captain Harlan at the camp and tell him the scouts are gone.', npc: 'isle_captain' },
-  { id: 'ferry', title: 'The Ferry to Hollowmere', text: 'Captain Harlan left you a chest on the jetty to the south-west: open it (click it). Then board the ferry, or talk to Old Wyck, to sail for Hollowmere.' },
+  { id: 'ferry', title: 'The Ship to Hollowmere', text: 'Captain Harlan left you a chest by the dock to the south-west: open it (click it). Then board Old Wyck\'s ship at the end of the dock, or talk to him, to sail for Hollowmere.' },
 ];
 const LAST = TUT_STEPS.length - 1;
 const STEP = Object.fromEntries(TUT_STEPS.map((t, i) => [t.id, i]));
@@ -85,7 +85,7 @@ export const tutorialMethods = {
     this.spawnNpc('isle_lookout', A.lookout.x, A.lookout.y, 6, { zone: id });
     this.spawnNpc('isle_sailor1', A.sailor1.x, A.sailor1.y, 1, { zone: id });
     this.spawnNpc('isle_sailor2', A.sailor2.x, A.sailor2.y, 5, { zone: id });
-    this.newEnt({ type: 'portal', kind: 'ferry', x: A.ferry.x, y: A.ferry.y, zone: id, name: 'Ferry to Hollowmere' });
+    this.newEnt({ type: 'portal', kind: 'ferry', x: A.ferry.x, y: A.ferry.y, zone: id, name: 'Ship to Hollowmere', reach: 4.6, dir: 2 });
     // the island's monsters are this hero's alone, and don't come back once beaten
     for (const group of Object.values(map.starter.mobs)) for (const s of group) {
       const m = this.spawnMob(s.kind, s.x, s.y, id, { tutFor: p.id });
@@ -103,7 +103,7 @@ export const tutorialMethods = {
     const was = this.isleZone(p);
     const spot = this.map.playerSpawn;
     if (was) this.movePlayer(p, 'world', spot.x, spot.y);
-    if (how === 'ferry') this.privateEvent(p, { e: 'sys', text: 'The ferry bumps against Hollowmere\'s jetty. Old Wyck points you toward the town square.' });
+    if (how === 'ferry') this.privateEvent(p, { e: 'sys', text: 'The ship bumps against Hollowmere\'s jetty. Old Wyck points you toward the town square.' });
     this.broadcastEvent({ e: 'sys', text: `${p.name} the ${p.cls[0].toUpperCase() + p.cls.slice(1)} arrived in Hollowmere.` });
     this.privateEvent(p, { e: 'arrived', how });
   },
@@ -117,7 +117,7 @@ export const tutorialMethods = {
     if (n.kind === 'isle_ferryman') {
       if (!fin && s !== 'ferry') return say('Can\'t take you across yet, friend. The captain wants a word with everyone who came off that ship. And mind the goblins on the bluff.', bye('I\'ll see the captain'));
       const chest = this.isleChest(p);
-      return say(`Hollowmere's just across the water. Town square, market, the Sleeping Goat.${chest && !chest.opened ? ' And don\'t forget the captain\'s chest there on the jetty: that\'s yours.' : ''} Climb aboard when you're ready.`, [{ id: 'board', label: 'Take me to Hollowmere' }, { id: 'bye', label: 'Not yet' }]);
+      return say(`Hollowmere's just across the water. Town square, market, the Sleeping Goat.${chest && !chest.opened ? ' And don\'t forget the captain\'s chest there by the dock: that\'s yours.' : ''} Climb aboard when you're ready.`, [{ id: 'board', label: 'Take me to Hollowmere' }, { id: 'bye', label: 'Not yet' }]);
     }
     if (n.kind === 'isle_sailor1' || n.kind === 'isle_sailor2') return this.isleSideTalk(p, n, say, bye);
     if (n.kind === 'isle_cook') {
@@ -143,10 +143,10 @@ export const tutorialMethods = {
     }
     if (s === 'report') {
       this.tutAdvance(p, STEP.ferry);
-      return say('Snikt\'s gone? Ha! That\'ll teach them to hunt shipwrecks.\n\nYou\'ve earned your passage. Old Wyck the ferryman is at the jetty on the south-west shore; he\'ll row you to Hollowmere. Tell Elder Maren that Harlan sends his regards. And take this, for the road.', bye('Thank you, Captain'));
+      return say('Snikt\'s gone? Ha! That\'ll teach them to hunt shipwrecks.\n\nYou\'ve earned your passage. Old Wyck is at the dock on the south-west shore; his ship will take you to Hollowmere. Tell Elder Maren that Harlan sends his regards. And take this, for the road.', bye('Thank you, Captain'));
     }
-    if (s === 'ferry') return say('The jetty is down the path to the south-west. Hollowmere has work for someone like you.', bye('On my way'));
-    if (s === 'done') return say('The ferry can take you across whenever you like. The isle is quiet now, thanks to you.', bye('Farewell'));
+    if (s === 'ferry') return say('The dock is down the path to the south-west. Hollowmere has work for someone like you.', bye('On my way'));
+    if (s === 'done') return say('Old Wyck\'s ship can take you across whenever you like. The isle is quiet now, thanks to you.', bye('Farewell'));
     const hints = { fight: 'The tide pools are east of here. Slimes are slow: hit them and step back.', loot: 'Pick up what they dropped: walk over it, or press V.', gear: 'Put that armour on: open your bags with I and click it.', skill: 'You\'ve earned a skill point. Press K and learn a skill.', cook: 'Mira wants a word. She\'s by the fire.', crabs: 'Skitterers on the south beach. Mira will be grateful.', wolves: 'The pinewood is west. Wolves hunt in packs: fight them one at a time.', alpha: 'Greymuzzle dens at the far side of the pinewood. Careful.', lookout: 'Brann is on the path to the north bluff. He\'s been watching the goblins.', scouts: 'Clear the scouts on the bluff first.', snikt: 'Snikt is the big one by the tents.' };
     return say(hints[s] || 'Stay sharp.', bye());
   },
@@ -252,17 +252,22 @@ export const tutorialMethods = {
     // aboard: the ship casts off and sails away from the isle, then the crossing to Hollowmere
     const A = z.map.starter.areas, ship = [...this.ents.values()].find((e) => e.type === 'portal' && e.kind === 'ferry' && e.zone === p.zone);
     if (!ship) return this.tutFinish(p, 'ferry');
-    p.riding = true; p.path = null; p.moveDir = null; p.target = null; p.selfDirty = true;
-    this.teleport(p, ship.x, ship.y);
+    p.riding = true; p.path = null; p.moveDir = null; p.target = null; p.pending = null; p.selfDirty = true;
+    // aboard: standing on her deck a little aft of the middle, looking over the bow
+    const DECK = -1.2;                                     // along her length from the middle (she points +y)
+    this.teleport(p, ship.x, ship.y + DECK); p.dir = dirFromVector(0, 1); this.setAnim(p, 'idle');
     this.privateEvent(p, { e: 'ferryride', id: ship.id });
-    const dx = ship.x - A.jetty.x, dy = ship.y - A.jetty.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
-    const steps = 70;
-    for (let i = 1; i <= steps; i++) this.later(i * 0.1, () => {
-      if (!this.ents.has(p.id) || p.zone !== ship.zone) return;
-      const k = i / steps, v = 0.03 + 0.14 * k;            // gathering speed as the sails fill
-      ship.x += ux * v; ship.y += uy * v; p.x = ship.x; p.y = ship.y;
-    });
-    this.later(steps * 0.1 + 0.2, () => { if (!this.ents.has(p.id)) return; p.riding = false; this.tutFinish(p, 'ferry'); });
+    // she casts off and sails out bow first, gathering speed as the sails fill (moved every tick,
+    // the hero with her, so nothing jumps)
+    const dur = T(7), start = this.tick;
+    const sail = () => {
+      if (!this.ents.has(p.id) || p.zone !== ship.zone || !this.ents.has(ship.id)) return;
+      const k = (this.tick - start) / dur, v = (0.6 + 2.6 * Math.min(1, k)) / TICK_RATE;
+      ship.y += v; p.x = ship.x; p.y = ship.y + DECK; p.dir = dirFromVector(0, 1);
+      if (this.tick - start < dur) this.later(1 / TICK_RATE, sail);
+      else { p.riding = false; this.tutFinish(p, 'ferry'); }
+    };
+    this.later(0.4, sail);
   },
   isleChest(p) { for (const e of this.ents.values()) if (e.type === 'chest' && e.isleReward === p.id && e.zone === p.zone) return e; return null; },
   // Captain Harlan's thanks: it bursts open with the reward spilling out onto the jetty

@@ -660,7 +660,7 @@ export class World {
   }
 
   updatePlayer(p) {
-    if (this.tick % 10 === 0) this.unstick(p);
+    if (this.tick % 10 === 0 && !p.riding) this.unstick(p);   // (not while aboard a ship out on the water)
     if (this.tick % 10 === p.id % 10) { this.questTick(p); this.attuneStones(p); }
     if (this.tick % TICK_RATE === p.id % TICK_RATE) this.progressTick(p);
     if (p.anim === 'die') {
@@ -704,7 +704,7 @@ export class World {
 
     if (p.pending != null) {
       const t = this.ents.get(p.pending);
-      const reach = t?.type === 'npc' ? (t.front || NPCS[t.kind].front ? 2.9 : NPCS[t.kind].big ? 3.2 : 2.2) : t?.type === 'loot' ? 1.0 : t?.type === 'node' ? 1.6 : t?.type === 'station' ? 2.4 : t?.type === 'crop' ? 1.5 : 1.7;
+      const reach = t?.type === 'npc' ? (t.front || NPCS[t.kind].front ? 2.9 : NPCS[t.kind].big ? 3.2 : 2.2) : t?.type === 'loot' ? 1.0 : t?.type === 'node' ? 1.6 : t?.type === 'station' ? 2.4 : t?.type === 'crop' ? 1.5 : t?.reach || 1.7;
       if (!t || t.zone !== p.zone || t.hidden) p.pending = null;
       else if (Math.hypot(t.x - p.x, t.y - p.y) < reach) {
         p.pending = null; p.path = null; moving = false;

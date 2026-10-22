@@ -147,6 +147,7 @@ export const OBJECTS = {
   // the ship the hero washed up from, broken on the beach of Tutorial Island (Poly Haven's Dutch ship, CC0, wrecked in Blender)
   shipwreck:    { sprites: ['shipwreck'], foot: [1, 1], solid: true, fade: true },
   // a timber of the wreck on Tutorial Island, still burning: flames, embers, firelight and black smoke
+  dock:         { sprites: ['dock'], foot: [2, 10], solid: false },   // Tutorial Island's pier (Poly Haven, Rico Cilliers, CC0)
   burning_beam: { sprites: ['logs'], foot: [1, 1], solid: true, fade: true, fire: [{ x: 0, y: 0, z: 0.25, s: 1.15, n: 3 }], lights: [{ x: 0, y: 0, z: 0.8, r: 5, c: FIRE, flicker: true }] },
   rockpile:     { sprites: ['rockpile'], foot: [1, 1], solid: true },
   web:          { sprites: ['web_0', 'web_1'], foot: [1, 1], solid: false, flat: true },
@@ -440,7 +441,7 @@ export const INN_PRICE = 10;
 export const NPCS = {
   // Tutorial Island, the starting island
   isle_captain:  { name: 'Captain Harlan', sprite: 'captain_rourke', role: 'isle' },
-  isle_ferryman: { name: 'Old Wyck the Ferryman', sprite: 'ferryman_gil', role: 'isle' },
+  isle_ferryman: { name: 'Old Wyck, Ship\'s Master', sprite: 'ferryman_gil', role: 'isle' },
   isle_cook:     { name: 'Mira the Ship\'s Cook', sprite: 'innkeeper', role: 'isle' },
   isle_lookout:  { name: 'Brann the Lookout', sprite: 'watchman', role: 'isle' },
   isle_sailor1:  { name: 'Tobias, Wounded Deckhand', sprite: 'trader_tackle', role: 'isle' },
