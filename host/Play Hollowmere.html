@@ -1358,6 +1358,37 @@ textarea.mail-paper { outline: none; }
 #d-tip b { color: #ffd36a; }
 #d-up { font-size: 16px; padding: 7px 26px; margin-top: 4px; }
 #d-auto { color: var(--dim); font-size: 12px; }
+
+/* ---- battle list ------------------------------------------------------------------- */
+#battle { position: fixed; left: 14px; top: 156px; width: 214px; padding: 6px 7px 7px; z-index: 9; transition: opacity .5s; }
+#battle[hidden] { display: none; }
+#battle.quiet { opacity: .45; }
+#battle .bl-head { display: flex; align-items: baseline; justify-content: space-between; padding: 0 3px 4px; font-family: var(--display); font-size: 13px; letter-spacing: .06em; color: #e8d3a0; }
+#battle .bl-count { font-family: system-ui, sans-serif; font-size: 11px; letter-spacing: 0; color: #b9a884; }
+#battle .bl-count.hot { color: #ff7a5a; font-weight: 700; }
+#battle .bl-sort { display: flex; gap: 3px; margin-bottom: 5px; }
+#battle .bl-sort button { flex: 1; font-size: 10.5px; padding: 2px 0; border-radius: 3px; border: 1px solid rgba(201,162,79,.35); background: rgba(0,0,0,.3); color: #c8b894; cursor: pointer; }
+#battle .bl-sort button.on { background: rgba(201,162,79,.28); color: #ffe7b0; border-color: #c9a24f; }
+#battle .bl-rows { display: flex; flex-direction: column; gap: 3px; }
+#battle .bl-row { position: relative; display: flex; align-items: center; gap: 6px; padding: 3px 5px 3px 3px; border-radius: 4px; background: rgba(10,7,4,.55); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); cursor: pointer; }
+#battle .bl-row:hover { background: rgba(60,40,18,.7); }
+#battle .bl-row.tgt { box-shadow: inset 0 0 0 2px #ffd36a, 0 0 8px rgba(255,211,106,.4); }
+#battle .bl-row.onme { background: rgba(70,12,8,.6); }
+#battle .bl-row.boss .bl-name::before { content: '☠ '; color: #ff7050; }
+#battle .bl-face { width: 26px; height: 26px; border-radius: 4px; background: rgba(0,0,0,.4); flex: none; }
+#battle .bl-mid { flex: 1; min-width: 0; }
+#battle .bl-top { display: flex; align-items: center; gap: 5px; font-size: 12px; line-height: 14px; }
+#battle .bl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f0e2c4; font-weight: 600; }
+#battle .bl-lv { font-weight: 800; font-size: 11px; }
+#battle .bl-flag { width: 13px; height: 13px; flex: none; }
+#battle .bl-flag.me { background: no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 14l3-1 8-8 1-3-3 1-8 8z' fill='%23ff5a46' stroke='%23200' stroke-width='1'/%3E%3Cpath d='M3 10l3 3' stroke='%23200' stroke-width='1.6'/%3E%3C/svg%3E"); }
+#battle .bl-flag.party { border-radius: 50%; background: #5ab4ff; box-shadow: 0 0 0 2px rgba(0,0,0,.6); transform: scale(.7); }
+#battle .bl-bar { height: 6px; margin-top: 3px; border-radius: 3px; background: rgba(0,0,0,.55); overflow: hidden; }
+#battle .bl-bar i { display: block; height: 100%; background: linear-gradient(#e85a48, #a52a1c); transition: width .25s; }
+#battle .bl-bar.mid i { background: linear-gradient(#f0a040, #b06a18); }
+#battle .bl-bar.low i { background: linear-gradient(#ffd04a, #c08a10); }
+#battle .bl-more { font-size: 11px; color: #a89670; text-align: center; margin-top: 3px; }
+#battle .bl-more:empty { display: none; }
 </style>
 </head>
 <body>
@@ -1395,6 +1426,7 @@ textarea.mail-paper { outline: none; }
       <div id="players-online"></div>
     </div>
 
+    <div id="battle" class="frame" hidden><div class="bl-head"><b>Battle</b><span class="bl-count"></span></div><div class="bl-sort"></div><div class="bl-rows"></div><div class="bl-more"></div></div>
     <div id="party-wrap" hidden><div class="party-head"><span id="party-title">Party</span><button id="party-leave" data-tip="Leave the party">Leave</button></div><div id="party-frames"></div></div>
     <div id="party-invite" class="frame" hidden role="dialog" aria-label="Party invitation">
       <div class="pinv-icon">⚑</div><div id="pinv-text"></div>
