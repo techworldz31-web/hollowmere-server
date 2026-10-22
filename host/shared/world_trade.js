@@ -34,6 +34,7 @@ export const swapMethods = {
     if (this.tradeOf(p)) return this.privateEvent(p, { e: 'sys', text: 'Finish or cancel your trade first.' });
     const e = this.takeFromSlot(p, slot, qty);
     this.privateEvent(p, { e: 'sys', text: `Destroyed ${itemName(e)}${e.qty > 1 ? ' ×' + e.qty : ''}.` });
+    this.noteDestroyed(p, e);
   },
   inTown(p) {
     const T0 = this.map.town;

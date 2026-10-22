@@ -271,7 +271,7 @@ export const socialMethods = {
     this.pushFriends(p);
   },
   friendsView(p) {
-    return (p.friends || []).map((n) => { const e = this.playerByName(n); return { n: e ? e.name : n, on: e ? 1 : 0, lv: e?.level, c: e?.cls, z: e ? this.whereName(e) : '' }; })
+    return (p.friends || []).map((n) => { const e = this.playerByName(n); return { n: e ? e.name : n, on: e ? 1 : 0, afk: e?.afk ? 1 : 0, lv: e?.level, c: e?.cls, z: e ? this.whereName(e) : '' }; })
       .sort((a, b) => b.on - a.on || a.n.localeCompare(b.n));
   },
   pushFriends(p) { this.privateEvent(p, { e: 'friends', f: this.friendsView(p) }); },
@@ -282,6 +282,7 @@ export const socialMethods = {
       if (!e || e === p) continue;
       if ((e.friends || []).some((f) => key(f) === key(p.name))) {
         this.privateEvent(e, { e: 'sys', text: `Your friend ${p.name} has ${online ? 'come online' : 'gone offline'}.`, friend: 1 });
+        this.privateEvent(e, { e: 'friendon', name: p.name, on: online ? 1 : 0 });
         this.pushFriends(e);
       }
     }
@@ -319,6 +320,7 @@ export const socialMethods = {
       const t = toName && this.playerByName(toName);
       if (!t) { this.privateEvent(p, { e: 'sys', text: toName ? `${toName} isn't online.` : 'Nobody has whispered to you yet.' }); return true; }
       this.privateEvent(t, { e: 'chat', from: p.name, text: m[3], whisper: 1 });
+      if (t.afk) this.privateEvent(p, { e: 'chat', from: t.name, text: '(away from keyboard, will reply later)', whisper: 1, auto: 1 });
       this.privateEvent(p, { e: 'chat', from: `To ${t.name}`, text: m[3], whisper: 1, out: 1 });
       t.replyTo = p.name;
       return true;

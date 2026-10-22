@@ -26,6 +26,7 @@ import { partyMethods, PARTY_SHARE_RANGE } from './world_party.js';
 import { progressMethods, freshProg } from './world_progress.js';
 import { socialMethods } from './world_social.js';
 import { mailMethods } from './world_mail.js';
+import { qolMethods } from './world_qol.js';
 import { tutorialMethods } from './world_tutorial.js';
 import { bossMethods } from './world_bosses.js';
 import { poiMethods } from './world_pois.js';
@@ -439,6 +440,7 @@ export class World {
         const tier = (k) => e.equip[k] ? ITEMS[e.equip[k].item].tier : 0;
         o.g = [tier('weapon'), tier('armor'), e.dye, tier('helm'), tier('gloves'), tier('boots')];
         if (e.title) o.tt = e.title;
+        if (e.afk) o.afk = 1;
         if (e.mounted) o.mt = MOUNTS[e.mounted].sprite;
         if (e.buffs.ward?.until > this.tick || e.buffs.barrier?.until > this.tick) o.st = e.buffs.barrier?.until > this.tick ? 'ice' : 'ward';
         else if (e.buffs.shieldwall?.until > this.tick) o.st = 'wall';
@@ -446,6 +448,7 @@ export class World {
         else if (e.buffs.battlecry?.until > this.tick) o.st = 'buff';
         else if (e.slowUntil > this.tick) o.st = 'slow';
       }
+      if (e.type === 'mob' && e.target != null && e.hp > 0) o.tg = e.target;   // who it's after (target of target)
       if (e.type === 'mob') { if (e.slowUntil > this.tick) o.st = 'slow'; if (e.burn) o.st = 'burn'; if (e.markUntil > this.tick) o.st = 'mark'; if (e.enraged) o.st = 'rage'; if (e.bomb > this.tick) o.bm = e.bomb; if (e.cast && e.cast.end > this.tick && e.hp > 0 && !(e.stunUntil > this.tick)) o.cb = [e.cast.start, e.cast.end, e.cast.name]; }
       if (e.type === 'loot') { o.q = e.qty; if (e.r) o.r = e.r; }
       if (e.type === 'pet') o.n = PETS[e.kind].name;
@@ -491,6 +494,7 @@ export class World {
   // ---------------------------------------------------------------- commands
   handle(clientId, p, m) {
     const dead = p.anim === 'die';
+    if (p.afk && m.t !== C2S.PING && m.t !== C2S.AFK && !(m.t === C2S.CHAT && /^\/afk\b/i.test(m.text || ''))) this.setAfk(p, false);   // back at the keyboard
     // held by an admin (frozen or jailed): no moving, fighting, working or travelling
     // on the ferry from Tutorial Island: along for the ride
     if (p.riding && [C2S.MOVE, C2S.DIR, C2S.TRAVEL, C2S.HEARTH, C2S.ATTACK, C2S.INTERACT, C2S.SKILL, C2S.FISH, C2S.FARM, C2S.MOUNT].includes(m.t)) return;
@@ -563,7 +567,8 @@ export class World {
         break;
       case C2S.SETDYE: p.dye = 0; p.selfDirty = true; break;
       case C2S.CHAT: {
-        const text = m.text.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 140);
+        const text = this.linkItems(p, m.text.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 140));
+        if (/^\/afk\b/i.test(text)) { this.setAfk(p, !p.afk); break; }
         if (/^\/admin\b/i.test(text)) break;                       // admin commands are the online server's business
         if (p.muted && text && !/^\/stuck\b/i.test(text)) { this.privateEvent(p, { e: 'sys', text: 'An admin has muted you: your messages aren\'t being sent.' }); break; }
         if (text.toLowerCase() === '/stuck') { if (!p.frozen) this.rescue(p); break; }
@@ -593,6 +598,9 @@ export class World {
       }
       case C2S.GUILD: return this.guildOp(p, m);
       case C2S.FRIEND: return this.friendOp(p, m);
+      case C2S.SPLIT: return this.splitStack(p, m.slot, m.qty);
+      case C2S.UNDO: return this.undoDestroy(p);
+      case C2S.AFK: return this.setAfk(p, !!m.on);
       case C2S.MAIL: return this.mailCommand(p, m);
       case C2S.TUT: return this.tutorialOp(p, m);
       case C2S.PREFS: p.auto = m.auto; if (m.loot !== undefined) p.autoLoot = m.loot === 1; break;
@@ -1795,7 +1803,10 @@ export class World {
     } else {
       if (!this.addItem(p, l.kind, l.qty, l.r, l.b || null)) { if (!quietFull || !p.fullWarnAt || this.tick - p.fullWarnAt > T(8)) { p.fullWarnAt = this.tick; this.privateEvent(p, { e: 'sys', text: 'Your pack is full: the loot stays on the ground.' }); } return false; }
       const entry = { item: l.kind, r: l.r };
-      this.privateEvent(p, { e: 'loot', text: `Picked up ${itemName(entry)}${l.qty > 1 ? ' x' + l.qty : ''}.`, r: l.r || 0 });
+      this.privateEvent(p, { e: 'loot', text: `Picked up ${itemName(entry)}${l.qty > 1 ? ' x' + l.qty : ''}.`, r: l.r || 0, item: l.kind, qty: l.qty });
+      // nearly full: a warning while there's still room, not after the loot is left behind
+      const free = p.inv.filter((x) => !x).length;
+      if (free <= 2 && this.tick - (p.packWarnAt || -1e9) > T(60)) { p.packWarnAt = this.tick; this.privateEvent(p, { e: 'packwarn', free }); }
       this.tutorialEvent(p, 'loot');
     }
     p.selfDirty = true;
@@ -1900,6 +1911,7 @@ export class World {
   }
 
   sell(p, slot) {
+    if (slot === -1) return this.sellJunk(p);
     const it = p.inv[slot];
     if (!it) return;
     if (ITEMS[it.item].type === 'quest') return this.privateEvent(p, { e: 'sys', text: 'Someone is waiting for that.' });
@@ -2110,4 +2122,4 @@ export class World {
 }
 
 // trades (fishing, gathering, cooking) and town events live in their own files
-Object.assign(World.prototype, tradeMethods, townMethods, farmMethods, questMethods, travelMethods, specMethods, partyMethods, swapMethods, progressMethods, socialMethods, tutorialMethods, bossMethods, poiMethods, mailMethods);
+Object.assign(World.prototype, tradeMethods, townMethods, farmMethods, questMethods, travelMethods, specMethods, partyMethods, swapMethods, progressMethods, socialMethods, tutorialMethods, bossMethods, poiMethods, mailMethods, qolMethods);

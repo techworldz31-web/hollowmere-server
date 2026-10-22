@@ -41,6 +41,9 @@ export const C2S = {
   DROP: 'drop',         // { slot, qty }           put an item on the ground (not in town)
   GUILD: 'guild',       // { op, name?, tag?, text?, slot?, i?, amount? }   guilds (see shared/world_social.js)
   FRIEND: 'friend',     // { op: 'add'|'remove', name }
+  SPLIT: 'split',       // { slot, qty }          split a stack: qty goes to an empty slot
+  UNDO: 'undo',         // {}                     take back the item you just destroyed
+  AFK: 'afk',           // { on }                 away from keyboard
   MAIL: 'mail',         // { op: 'open'|'send'|'read'|'take'|'del'|'back', id?, to?, subj?, body?, slots?, gold? }   the post
   TUT: 'tut',           // { op: 'intro'|'skip'|'next' }   the guided start
 };
@@ -75,7 +78,8 @@ export function validate(m) {
     case C2S.MOVE: return num(m.x) && num(m.y);
     case C2S.DIR: return num(m.dx) && num(m.dy) && Math.abs(m.dx) <= 1.01 && Math.abs(m.dy) <= 1.01;
     case C2S.ATTACK: case C2S.INTERACT: return int(m.id);
-    case C2S.USE: case C2S.SELL: return int(m.slot);
+    case C2S.USE: return int(m.slot);
+    case C2S.SELL: return int(m.slot) && m.slot >= -1;
     case C2S.UNEQUIP: return m.slot === 'weapon' || m.slot === 'armor';
     case C2S.BUY: return int(m.npc) && str(m.item, 32);
     case C2S.DIALOG: return int(m.npc) && str(m.choice, 32);
@@ -104,6 +108,9 @@ export function validate(m) {
       && (m.name === undefined || str(m.name, 24)) && (m.tag === undefined || str(m.tag, 8)) && (m.text === undefined || str(m.text, 140))
       && (m.slot === undefined || (int(m.slot) && m.slot >= 0 && m.slot < 200)) && (m.i === undefined || (int(m.i) && m.i >= 0 && m.i < 40)) && (m.amount === undefined || (num(m.amount) && m.amount >= 0 && m.amount <= 1e9));
     case C2S.FRIEND: return (m.op === 'add' || m.op === 'remove') && str(m.name, 24);
+    case C2S.SPLIT: return int(m.slot) && m.slot >= 0 && m.slot < 200 && int(m.qty) && m.qty >= 1 && m.qty <= 9999;
+    case C2S.UNDO: return true;
+    case C2S.AFK: return typeof m.on === 'boolean';
     case C2S.MAIL: return ['open', 'send', 'read', 'take', 'del', 'back'].includes(m.op) && (m.id === undefined || str(m.id, 32)) && (m.to === undefined || str(m.to, 24))
       && (m.subj === undefined || str(m.subj, 60)) && (m.body === undefined || str(m.body, 600)) && (m.gold === undefined || (num(m.gold) && m.gold >= 0 && m.gold <= 1e9))
       && (m.slots === undefined || (Array.isArray(m.slots) && m.slots.length <= 4 && m.slots.every((i) => int(i) && i >= 0 && i < 200)));

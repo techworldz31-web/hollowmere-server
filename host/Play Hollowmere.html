@@ -1316,6 +1316,37 @@ textarea.mail-paper { outline: none; }
 
 #panel-shop { max-height: calc(100vh - 150px); overflow-y: auto; }
 #shop-buyback { margin: 0 0 10px; padding: 0 0 8px; border-top: 0; border-bottom: 1px solid rgba(168,138,79,.35); }
+
+/* ---- comforts ---------------------------------------------------------------------- */
+#shop-junk { margin: 0 0 8px; }
+#inv-grid .slot.junk img { filter: grayscale(.85) brightness(.7); }
+#inv-grid .slot.fresh { box-shadow: 0 0 0 2px #ffd36a, 0 0 12px 2px rgba(255,211,106,.75); animation: freshPulse 1.4s ease-in-out infinite; }
+@keyframes freshPulse { 50% { box-shadow: 0 0 0 2px #ffe9a8, 0 0 18px 5px rgba(255,211,106,.9); } }
+#pickup-feed { position: fixed; right: 20px; bottom: 210px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; z-index: 30; pointer-events: none; }
+#pickup-feed .pf-row { display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border-radius: 14px; background: rgba(14,10,6,.78); box-shadow: inset 0 0 0 1px rgba(201,162,79,.45); font-size: 13px; color: #ece2cc; transition: opacity .6s, transform .6s; animation: pfIn .25s ease-out; }
+#pickup-feed .pf-row img { width: 22px; height: 22px; border-radius: 4px; }
+#pickup-feed .pf-row b { color: #ffe2a0; }
+#pickup-feed .pf-row.out { opacity: 0; transform: translateX(20px); }
+@keyframes pfIn { from { opacity: 0; transform: translateX(24px); } }
+#qol-bar { position: fixed; left: 50%; top: 92px; transform: translate(-50%, -20px); display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-radius: 6px; background: rgba(20,14,8,.94); box-shadow: 0 0 0 1px #c9a24f, 0 8px 22px rgba(0,0,0,.6); color: #f2ead8; font-size: 14px; z-index: 90; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; }
+#qol-bar.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+#qol-bar.quest { box-shadow: 0 0 0 1px #ffd36a, 0 0 18px rgba(255,211,106,.45), 0 8px 22px rgba(0,0,0,.6); }
+#qol-bar .learn { padding: 4px 12px; }
+#edge-arrow { position: fixed; z-index: 15; transform: translate(-50%, -50%); pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+#edge-arrow[hidden] { display: none; }
+#edge-arrow i { width: 0; height: 0; border-top: 11px solid transparent; border-bottom: 11px solid transparent; border-left: 22px solid #ffd36a; filter: drop-shadow(0 0 4px rgba(0,0,0,.9)) drop-shadow(0 0 6px rgba(255,211,106,.6)); }
+#edge-arrow span { font-size: 11.5px; font-weight: 700; color: #ffe9b0; text-shadow: 0 1px 2px #000, 0 0 3px #000; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.cn { cursor: pointer; } .cn:hover { text-decoration: underline; }
+.ilink { cursor: help; font-weight: 700; } .ilink:hover { text-decoration: underline; }
+#tf-tot { margin-left: auto; margin-right: 8px; font-size: 12px; color: #e8d8b0; }
+#tf-tot.me { color: #ff8a6a; font-weight: 700; }
+.cdn { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-weight: 800; font-size: 15px; color: #fff; text-shadow: 0 0 3px #000, 0 1px 2px #000, 0 0 6px #000; pointer-events: none; z-index: 4; }
+.qol-why { position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, 0); padding: 1px 6px; border-radius: 3px; background: rgba(120,20,14,.92); color: #fff; font-size: 11px; font-weight: 700; white-space: nowrap; opacity: 0; pointer-events: none; z-index: 5; }
+.qol-why.show { animation: whyPop 1.3s ease-out; }
+@keyframes whyPop { 0% { opacity: 0; transform: translate(-50%, 6px); } 15% { opacity: 1; transform: translate(-50%, -2px); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -8px); } }
+.qol-flash { animation: qolShake .35s; } @keyframes qolShake { 20% { transform: translateX(-3px); } 40% { transform: translateX(3px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
+.soc-row .afk { color: #e8b060; font-weight: 700; }
+.ql-map { margin-left: 4px; }
 </style>
 </head>
 <body>
@@ -1336,7 +1367,7 @@ textarea.mail-paper { outline: none; }
       <div class="tf-name"><span class="uf-face mini"><canvas id="tf-face" width="96" height="96"></canvas><i class="uf-elite"></i></span><span id="tf-level" class="tf-lv">1</span><span id="tf-name">Target</span><button id="tf-clear" data-tip="Clear target (Esc)">✕</button></div>
       <div class="tf-barwrap"><i class="tf-dragon left"></i><div class="bar hp"><div id="tf-hp-lag" class="fill lag"></div><div id="tf-hp-fill" class="fill"></div><span id="tf-hp-text"></span></div><i class="tf-dragon right"></i></div>
       <div id="tf-cast" class="bar tf-cast" hidden><div id="tf-cast-fill" class="fill"></div><span id="tf-cast-text"></span></div>
-      <div class="tf-foot"><span id="tf-sub"></span><span id="tf-debuffs"></span></div>
+      <div class="tf-foot"><span id="tf-sub"></span><span id="tf-tot"></span><span id="tf-debuffs"></span></div>
     </div>
     <div id="streak" hidden></div>
     <div id="work-bar" hidden><span id="work-label"></span><div class="bar work"><div id="work-fill" class="fill"></div></div></div>
@@ -1485,6 +1516,7 @@ textarea.mail-paper { outline: none; }
 
     <section id="panel-shop" class="panel frame" hidden>
       <header><h3 id="shop-name">Shop</h3><button class="x" data-close="panel-shop">×</button></header>
+      <button id="shop-junk" class="learn" data-tip="Sell plain gear made for other classes, gear worse than yours, and junk like old boots. You can buy any of it back.">Sell junk</button>
       <div id="shop-buyback" hidden></div>
       <div id="shop-list"></div>
       <p class="dim small">Right-click items in your pack to sell them.</p>
@@ -1594,7 +1626,7 @@ textarea.mail-paper { outline: none; }
     <section id="panel-help" class="panel frame" hidden>
       <header><h3>Controls</h3><button class="x" data-close="panel-help">×</button></header>
       <dl class="controls" id="help-list"></dl>
-      <p class="dim small">Change any of these in Options (Esc).</p>
+      <p class="dim small">Press F1 or H to open this list. <button class="learn" id="help-keys">Change keys</button></p>
       <h4 class="help-sub">Playing together</h4>
       <dl class="controls"><dt>Right-click a player</dt><dd>Invite them to your party</dd><dt>/invite Name</dt><dd>Invite someone by name</dd>
         <dt>/p message</dt><dd>Talk to your party only</dd><dt>/leave · /kick Name · /promote Name</dt><dd>Leave, remove someone, hand over the lead</dd>
