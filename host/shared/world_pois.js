@@ -23,13 +23,16 @@ export const poiMethods = {
   // ---------------------------------------------------------------- life between the towns
   spawnWilds() {
     const m = this.map, near = (x, y, r) => {
-      for (let k = 0; k < 60; k++) { const a = this.rng() * Math.PI * 2, d = this.rng() * r, tx = x + Math.cos(a) * d, ty = y + Math.sin(a) * d; if (!isBlocked(m, Math.floor(tx), Math.floor(ty)) && m.terrain[Math.floor(ty) * m.w + Math.floor(tx)] !== 0) return { x: Math.floor(tx) + 0.5, y: Math.floor(ty) + 0.5 }; }
+      for (let k = 0; k < 60; k++) { const a = this.rng() * Math.PI * 2, d = this.rng() * r, tx = x + Math.cos(a) * d, ty = y + Math.sin(a) * d; if (!isBlocked(m, Math.floor(tx), Math.floor(ty)) && m.terrain[Math.floor(ty) * m.w + Math.floor(tx)] !== 0 && !Object.values(m.spots || {}).some((sp) => Math.hypot(sp.x - tx, sp.y - ty) < 10) && !(m.town && tx > m.town.x0 - 4 && tx < m.town.x1 + 4 && ty > m.town.y0 - 4 && ty < m.town.y1 + 4)) return { x: Math.floor(tx) + 0.5, y: Math.floor(ty) + 0.5 }; }
       return null;
     };
     // foxes: in Whisperwood and the fields south of town; wild horses on the Highlands
     const W = REGIONS.whisperwood, H = REGIONS.highlands, S = m.landmarks.meadow;
     [[W, 18], [W, 22], [W, 26], [{ x: S.x, y: S.y }, 14], [{ x: 120, y: 150 }, 12], [W, 14]].forEach(([c, r], i) => { const q = near(c.x, c.y, r); if (q) this.spawnNpc(`wild_fox_${i + 1}`, q.x, q.y, Math.floor(this.rng() * 8)); });
     for (let i = 1; i <= 4; i++) { const q = near(H.x + 4, H.y - 6, 12); if (q) this.spawnNpc(`wild_horse_${i}`, q.x, q.y, Math.floor(this.rng() * 8)); }
+    // deer grazing in Whisperwood's glades and the southern fields; stags on the woods' edges and the Highlands
+    [[W, 20], [W, 24], [W, 16], [W, 28], [{ x: S.x + 6, y: S.y - 4 }, 12], [{ x: 128, y: 160 }, 10]].forEach(([c, r], i) => { const q = near(c.x, c.y, r); if (q) this.spawnNpc(`wild_deer_${i + 1}`, q.x, q.y, Math.floor(this.rng() * 8)); });
+    [[W, 26], [{ x: H.x + 10, y: H.y + 8 }, 10], [W, 18]].forEach(([c, r], i) => { const q = near(c.x, c.y, r); if (q) this.spawnNpc(`wild_stag_${i + 1}`, q.x, q.y, Math.floor(this.rng() * 8)); });
     // travellers: from the town's gates out to the camps and back, and the weekly cart to Thornwick
     const sp = m.spots, gates = { s: { x: 96.5, y: 151.5 }, n: { x: 96.5, y: 50.5 }, w: { x: 70.5, y: 102.5 } };
     const routes = [[gates.s, sp.thornwick], [gates.n, sp.hermitage], [gates.w, sp.ridgewatch], [gates.s, sp.fenwatch]];
@@ -54,7 +57,9 @@ export const poiMethods = {
       }
     }
     if (n.fleeTo && this.tick < n.fleeUntil) {
+      const prevA = n.anim, prevT = n.animT;
       const r = this.walkTo(n, n.fleeTo.x, n.fleeTo.y, def.speed * 3.6, 600);
+      if (r === 'walk' && def.run) { if (prevA === 'run') { n.anim = 'run'; n.animT = prevT; } else this.setAnim(n, 'run'); }   // a deer bolts at a gallop
       if (r !== 'walk') { n.fleeTo = null; n.wanderAt = this.tick + T(2); }
       return;
     }
