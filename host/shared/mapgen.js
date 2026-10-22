@@ -851,6 +851,8 @@ export function generateMap(seed = WORLD_SEED) {
   const plans = SPAWN_PLAN.map((P) => { if (P.r > 1) planI++; const boss = P.r <= 1; return { P, pid: 'p' + planI, boss, n: boss ? P.n : Math.max(3, Math.round(P.n * 2.9)), R: boss ? 0 : Math.min(P.r * 4, 34), left: 0, miss: 0 }; });
   // bosses first (their ground is kept clear), then every kind takes turns, one monster each,
   // so two kinds sharing a region both get their share of the room
+  // quiet ground: no monsters near Tobin's fishing spot by the lake (a level 5 quest giver)
+  const QUIET = [{ ...freeNear(L.x + 9, L.y + 14), r: 22 }];
   const placeMob = (pl) => {
     const { P, pid, boss, R } = pl;
     let got = null;
@@ -860,6 +862,7 @@ export function generateMap(seed = WORLD_SEED) {
       if (!inside(x, y) || solid[idx(x, y)] || cliff[idx(x, y)] || (level[idx(x, y)] || 0) !== (P.tier || 0) || terrain[idx(x, y)] === TERRAIN.WATER) continue;
       if (Object.values(spots).some((s) => Math.hypot(s.x - x, s.y - y) < (s.r || 4) + 2)) continue;
       if (x >= TOWN.x0 - 6 && x <= TOWN.x1 + 6 && y >= TOWN.y0 - 6 && y <= TOWN.y1 + 6) continue;   // never in or right beside town
+      if (!boss && QUIET.some((q) => Math.hypot(q.x - x, q.y - y) < q.r)) continue;
       if (!boss && (!dry(x + 0.5, y + 0.5) || !ownGround(x + 0.5, y + 0.5, pid))) continue;
       // the same rule everywhere: no two monsters closer than the distance at which one notices you,
       // so walking up to one wakes one (two at most), never the whole pack

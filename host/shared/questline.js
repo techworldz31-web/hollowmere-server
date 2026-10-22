@@ -58,7 +58,7 @@ export const SPAWN_PLAN = [
   { kind: 'boar', x: 46, y: 140, r: 10, n: 10 },
   { kind: 'bandit', x: 44, y: 162, r: 9, n: 12, tier: 1 },
   { kind: 'bandit_captain', x: 44, y: 163, r: 1, n: 1, tier: 1 },
-  { kind: 'dire_wolf', x: 50, y: 82, r: 12, n: 12 },
+  { kind: 'dire_wolf', x: 44, y: 92, r: 12, n: 12 },
   { kind: 'golem', x: 22, y: 96, r: 15, n: 12, tier: 1 },
   { kind: 'hill_troll', x: 24, y: 95, r: 6, n: 8, tier: 2 },
   { kind: 'troll_king', x: 24, y: 95, r: 1, n: 1, tier: 2 },
