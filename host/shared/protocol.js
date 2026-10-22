@@ -44,6 +44,7 @@ export const C2S = {
   SPLIT: 'split',       // { slot, qty }          split a stack: qty goes to an empty slot
   UNDO: 'undo',         // {}                     take back the item you just destroyed
   AFK: 'afk',           // { on }                 away from keyboard
+  RESPAWN: 'respawn',   // {}                     get up again after falling
   MAIL: 'mail',         // { op: 'open'|'send'|'read'|'take'|'del'|'back', id?, to?, subj?, body?, slots?, gold? }   the post
   TUT: 'tut',           // { op: 'intro'|'skip'|'next' }   the guided start
 };
@@ -111,6 +112,7 @@ export function validate(m) {
     case C2S.SPLIT: return int(m.slot) && m.slot >= 0 && m.slot < 200 && int(m.qty) && m.qty >= 1 && m.qty <= 9999;
     case C2S.UNDO: return true;
     case C2S.AFK: return typeof m.on === 'boolean';
+    case C2S.RESPAWN: return true;
     case C2S.MAIL: return ['open', 'send', 'read', 'take', 'del', 'back'].includes(m.op) && (m.id === undefined || str(m.id, 32)) && (m.to === undefined || str(m.to, 24))
       && (m.subj === undefined || str(m.subj, 60)) && (m.body === undefined || str(m.body, 600)) && (m.gold === undefined || (num(m.gold) && m.gold >= 0 && m.gold <= 1e9))
       && (m.slots === undefined || (Array.isArray(m.slots) && m.slots.length <= 4 && m.slots.every((i) => int(i) && i >= 0 && i < 200)));

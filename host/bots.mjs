@@ -184,6 +184,7 @@ class Bot {
     else if (ev.e === 'ginvite') this.send({ t: 'guild', op: 'decline' });
   }
   onDeath() {
+    setTimeout(() => this.send({ t: 'respawn' }), 2500 + Math.random() * 2500);   // get up again
     // remember what killed it: that kind is avoided for a while, and it plays more carefully
     const killer = this.target && this.ents.find((e) => e.i === this.target) || this.attackers()[0];
     const k = killer?.k;

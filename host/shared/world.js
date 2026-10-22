@@ -601,6 +601,7 @@ export class World {
       case C2S.SPLIT: return this.splitStack(p, m.slot, m.qty);
       case C2S.UNDO: return this.undoDestroy(p);
       case C2S.AFK: return this.setAfk(p, !!m.on);
+      case C2S.RESPAWN: if (p.anim === 'die') p.wantUp = true; return;
       case C2S.MAIL: return this.mailCommand(p, m);
       case C2S.TUT: return this.tutorialOp(p, m);
       case C2S.PREFS: p.auto = m.auto; if (m.loot !== undefined) p.autoLoot = m.loot === 1; break;
@@ -680,7 +681,8 @@ export class World {
     if (this.tick % 10 === p.id % 10) { this.questTick(p); this.attuneStones(p); }
     if (this.tick % TICK_RATE === p.id % TICK_RATE) this.progressTick(p);
     if (p.anim === 'die') {
-      if (this.tick - p.deadAt > T(3.5)) this.respawnPlayer(p);
+      // back on your feet when you press Respawn (after a moment), or on your own after 30 seconds
+      if (this.tick - p.deadAt > T(p.wantUp ? 2 : 30)) { p.wantUp = false; this.respawnPlayer(p); }
       return;
     }
     const cls = CLASSES[p.cls], speed = this.playerSpeed(p), map = this.mapOf(p);
@@ -884,6 +886,11 @@ export class World {
       if (amount <= 0) { this.evAt(t, { e: 'dmg', id: t.id, v: 0, c: 0, p: 1, ab: 1 }); return; }
     }
     t.hp = Math.max(0, t.hp - amount);
+    if (t.type === 'player') {   // the last few blows, for the death screen
+      const by = src?.type === 'mob' ? (MOBS[src.kind]?.name || src.kind) : src?.type === 'player' ? src.name : null;
+      (t.hurtLog ||= []).push({ by, lv: src?.type === 'mob' ? (src.rareLv || MOBS[src.kind]?.lv || 1) : src?.level, v: amount, c: crit ? 1 : 0, dot: dot ? 1 : 0, at: this.tick });
+      if (t.hurtLog.length > 8) t.hurtLog.shift();
+    }
     this.evAt(t, { e: 'dmg', id: t.id, v: amount, c: crit ? 1 : 0, p: t.type === 'player' ? 1 : 0, ...(dot ? { dot: 1 } : {}) });
     if (src?.type === 'player' && t.type === 'mob' && !dot && src.mods) {
       if (src.mods.lifesteal && src.hp > 0 && src.hp < src.maxHp) { const v = Math.min(src.maxHp - src.hp, Math.max(1, Math.round(amount * src.mods.lifesteal))); src.hp += v; src.selfDirty = true; }
@@ -992,6 +999,11 @@ export class World {
     this.setAnim(p, 'die'); p.deadAt = this.tick; p.path = null; p.target = null; p.moveDir = null; p.swingAt = 0; p.channel = null; p.dash = null;
     const lost = Math.floor(p.gold * 0.1); p.gold -= lost; p.selfDirty = true;
     this.privateEvent(p, { e: 'sys', text: lost ? `You have fallen and dropped ${lost} gold.` : 'You have fallen.' });
+    const recent = (p.hurtLog || []).filter((h) => this.tick - h.at < T(10));
+    const last = [...recent].reverse().find((h) => h.by);
+    const byWho = {}; for (const h of recent) if (h.by) byWho[h.by] = (byWho[h.by] || 0) + h.v;
+    this.privateEvent(p, { e: 'died', by: last?.by || null, lv: last?.lv || 0, lost, hits: recent.slice(-5).map((h) => ({ by: h.by, v: h.v, c: h.c, dot: h.dot })), who: byWho, auto: 30 });
+    p.hurtLog = [];
     for (const e of this.ents.values()) if (e.type === 'mob' && e.target === p.id) { e.target = null; e.state = e.raid ? 'march' : 'return'; }
   }
 
