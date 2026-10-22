@@ -189,13 +189,18 @@ export class World {
 
   applySave(p, s) {
     const okInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+    // Nothing a hero owned is ever thrown away while loading: an item the game no longer knows
+    // (renamed or removed in an update) is kept aside in p.limbo, saved, and handed back by
+    // restoreLimbo() as soon as the game knows it again.
+    p.limbo = Array.isArray(s.limbo) ? s.limbo.filter((x) => x && typeof x === 'object' && typeof x.item === 'string').slice(0, 500) : [];
     const okEntry = (it) => {
       if (!it || typeof it !== 'object') return null;
       const item = LEGACY_ITEMS[it.item] || it.item;
-      if (!ITEMS[item]) return null;
+      if (!ITEMS[item]) { if (typeof it.item === 'string') p.limbo.push({ ...it }); return null; }
       const r = okInt(it.r, 0, RARITY.length - 1) ? it.r : 0;
       const b = r && !ITEMS[item].stack ? this.okBonus(it.b) : null;
-      return { item, qty: okInt(it.qty, 1, 999) ? it.qty : 1, ...(r ? { r } : {}), ...(b ? { b } : {}) };
+      const qty = Number.isInteger(it.qty) && it.qty >= 1 ? Math.min(it.qty, 9999) : 1;
+      return { item, qty, ...(r ? { r } : {}), ...(b ? { b } : {}) };
     };
     if (Array.isArray(s.friends)) p.friends = s.friends.filter((f) => typeof f === 'string' && f.length <= 16).slice(0, 50);
     if (s.tut && typeof s.tut === 'object') p.tut = { s: Math.max(0, Math.min(99, s.tut.s | 0)), done: !!s.tut.done };
@@ -204,7 +209,7 @@ export class World {
     if (okInt(s.level, 1, 99)) p.level = s.level;
     if (okInt(s.xp, 0, 1e9)) p.xp = s.xp;
     if (okInt(s.gold, 0, 1e9)) p.gold = s.gold;
-    if (Array.isArray(s.inv)) p.inv = new Array(INVENTORY_SIZE).fill(null).map((_, i) => okEntry(s.inv[i]));
+    if (Array.isArray(s.inv)) { p.inv = new Array(INVENTORY_SIZE).fill(null).map((_, i) => okEntry(s.inv[i])); for (const it of s.inv.slice(INVENTORY_SIZE)) if (it && typeof it.item === 'string') p.limbo.push({ ...it }); }
     if (s.equip) for (const slot of GEAR_SLOTS) {
       let e = s.equip[slot];
       if (typeof e === 'string') e = { item: e };                        // v1 saves stored plain ids
@@ -238,8 +243,13 @@ export class World {
     for (const q of QUEST_ORDER) if (p.quests[q]?.state === 'done' && QUESTS[q].reward.title && !p.titles.includes(QUESTS[q].reward.title)) p.titles.push(QUESTS[q].reward.title);
     if (p.quests.chief?.state === 'done' && !p.quests.map && !p.inv.some((i) => i?.item === 'sealed_map')) this.addItem(p, 'sealed_map', 1);
     if (s.bank && typeof s.bank === 'object') {
-      const size = okInt(s.bank.size, BANK.start, BANK.max) && (s.bank.size - BANK.start) % BANK.step === 0 ? s.bank.size : BANK.start;
-      p.bank = { size, items: new Array(size).fill(null).map((_, i) => okEntry(Array.isArray(s.bank.items) ? s.bank.items[i] : null)), gold: okInt(s.bank.gold, 0, 1e9) ? s.bank.gold : 0 };
+      // the vault never shrinks: an odd size is rounded up, never down, and is always big enough for what's in it
+      const raw = Array.isArray(s.bank.items) ? s.bank.items : [];
+      const want = Math.max(Number.isInteger(s.bank.size) ? s.bank.size : 0, raw.length, BANK.start);
+      const size = Math.min(Math.max(BANK.max, raw.length), BANK.start + Math.ceil((want - BANK.start) / BANK.step) * BANK.step);
+      const gold = Number.isFinite(s.bank.gold) && s.bank.gold > 0 ? Math.floor(s.bank.gold) : 0;
+      p.bank = { size, items: new Array(size).fill(null).map((_, i) => okEntry(raw[i])), gold };
+      this.restoreLimbo(p);
     }
     if (s.trades && typeof s.trades === 'object') for (const k of TRADE_ORDER) if (okInt(s.trades[k], 0, 1e8)) p.trades[k] = s.trades[k];
     if (s.fishLog && typeof s.fishLog === 'object') for (const k of FISH_ORDER) {
@@ -268,7 +278,7 @@ export class World {
     const pos = p.zone === 'world' ? p : kind === 'starter' ? this.map.playerSpawn : this.map.landmarks.cave;
     return { v: 3, name: p.name, cls: p.cls, level: p.level, xp: p.xp, gold: p.gold, hp: p.hp, inv: p.inv, equip: p.equip,
       skills: p.skills, quests: p.quests, titles: p.titles, title: p.title, pets: p.pets, pet: p.pet, dye: p.dye, bosses: p.bosses,
-      bank: p.bank, trades: p.trades, fishLog: p.fishLog, recipes: p.recipes, farm: this.farmSave(p), unlocks: p.unlocks,
+      bank: p.bank, limbo: p.limbo?.length ? p.limbo : undefined, trades: p.trades, fishLog: p.fishLog, recipes: p.recipes, farm: this.farmSave(p), unlocks: p.unlocks,
       spec: p.spec, mounts: p.mounts, mount: p.mount, stones: p.stones, prog: p.prog && { ...p.prog, lastSeen: Date.now() }, friends: p.friends, tut: p.tut, guildSolo: !this.hooks.saveGuilds && this.guildOf(p) ? this.guildOf(p) : undefined, mailBox: this.mailSolo(p), hearthLeft: Math.max(0, Math.ceil((p.hearthReady - this.tick) / TICK_RATE)),
       x: round2(pos.x), y: round2(pos.y), mapv: MAP_VERSION };
   }
@@ -1748,6 +1758,29 @@ export class World {
 
   // ---------------------------------------------------------------- the bank
   // ops: dep (inventory slot -> vault, whole stack or one), wd (vault slot -> pack), depgold / wdgold (amount), buy (20 more slots)
+  // every vault change, with the vault as it is afterwards, goes to the server's bank log
+  bankLog(p, m) {
+    if (!this.hooks.bankLog) return;
+    const b = p.bank;
+    this.hooks.bankLog({ at: new Date().toISOString(), hero: p.name, op: m.op, slot: m.slot, one: m.one ? 1 : undefined, amount: m.amount,
+      gold: b.gold, purse: p.gold, size: b.size, items: b.items.map((it, i) => it && `${i}:${it.item}${it.r ? '+' + it.r : ''}x${it.qty}`).filter(Boolean) });
+  }
+
+  // items kept aside while loading: back into the vault (else the pack) once the game knows them
+  restoreLimbo(p) {
+    if (!p.limbo?.length || !p.bank) return;
+    p.limbo = p.limbo.filter((it) => {
+      const item = LEGACY_ITEMS[it.item] || it.item;
+      if (!ITEMS[item]) return true;
+      const i = p.bank.items.indexOf(null);
+      const entry = { item, qty: Number.isInteger(it.qty) && it.qty > 0 ? it.qty : 1, ...(it.r ? { r: it.r } : {}), ...(it.b ? { b: it.b } : {}) };
+      if (i >= 0) { p.bank.items[i] = entry; return false; }
+      const j = p.inv.indexOf(null);
+      if (j >= 0) { p.inv[j] = entry; return false; }
+      return true;                            // no room yet: kept for next time
+    });
+  }
+
   bankOp(p, m) {
     const near = [...this.ents.values()].some((e) => e.type === 'npc' && e.zone === p.zone && NPCS[e.kind].role === 'bank' && Math.hypot(e.x - p.x, e.y - p.y) < 4.5);
     if (!near) return this.privateEvent(p, { e: 'sys', text: 'Speak to a bank clerk to use your vault.' });
@@ -1801,6 +1834,8 @@ export class World {
       this.privateEvent(p, { e: 'loot', text: `Your vault now holds ${b.size} slots.`, r: 1 });
     } else return;
     p.selfDirty = true;
+    this.bankLog?.(p, m);
+    this.savePlayerNow?.(p);   // vault changes are written straight away, not at the next 10-second save
   }
 
   updateLoot(l) { if (this.tick > l.expires) this.ents.delete(l.id); }

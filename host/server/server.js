@@ -9,7 +9,7 @@
 
 import { createServer } from 'node:http';
 import { randomUUID, scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, appendFileSync, renameSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, appendFileSync, renameSync, openSync, fsyncSync, closeSync, readdirSync, unlinkSync, copyFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
@@ -34,11 +34,56 @@ const GAME_DIR = process.env.HM_GAME || join(ROOT, 'dist', 'Hollowmere');
 // ---- persistence (JSON file; swap for a database later) ----------------------
 // NOTE: players are keyed by name with no password. Add real accounts before
 // opening this to the public internet.
-let saves = {};
-try { saves = JSON.parse(readFileSync(SAVE_FILE, 'utf8')); } catch {}
+// ---- safe saving --------------------------------------------------------------------------
+// Every data file is written to a temporary file first, flushed to disk, then swapped in, so a
+// crash or power cut in the middle of a save can never leave a half-written file. The previous
+// copy is kept as <file>.bak, and players.json (with the guilds and the post) is copied into
+// data/backups once an hour; the last 72 hourly copies are kept.
+const BACKUP_DIR = join(DATA_DIR, 'backups');
+function safeWrite(file, text) {
+  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+  const tmp = file + '.tmp', fd = openSync(tmp, 'w');
+  try { writeFileSync(fd, text); fsyncSync(fd); } finally { closeSync(fd); }
+  if (existsSync(file)) { try { copyFileSync(file, file + '.bak'); } catch {} }
+  renameSync(tmp, file);
+}
+// Read a data file. If it's damaged, fall back to its .bak, then to the newest hourly backup.
+// If there's a file but none of them can be read, the server stops instead of starting empty
+// (starting empty would overwrite everyone's heroes and vaults at the next save).
+function safeRead(file, label) {
+  const tries = [file, file + '.bak'];
+  if (existsSync(BACKUP_DIR)) {
+    const base = file.split(/[\\/]/).pop().replace('.json', '');
+    tries.push(...readdirSync(BACKUP_DIR).filter((f) => f.startsWith(base + '-')).sort().reverse().map((f) => join(BACKUP_DIR, f)));
+  }
+  let seen = false;
+  for (const f of tries) {
+    if (!existsSync(f)) continue;
+    seen = true;
+    try { const v = JSON.parse(readFileSync(f, 'utf8')); if (f !== file) console.warn(`!! ${label}: ${file} was damaged, loaded ${f} instead.`); return v; }
+    catch (e) { console.warn(`!! ${label}: could not read ${f} (${e.message})`); }
+  }
+  if (seen) { console.error(`!! ${label}: every copy is damaged. Stopping so nothing gets overwritten. Look in ${BACKUP_DIR}.`); process.exit(1); }
+  return null;
+}
+function hourlyBackup() {
+  try {
+    if (!existsSync(BACKUP_DIR)) mkdirSync(BACKUP_DIR, { recursive: true });
+    const stamp = new Date().toISOString().slice(0, 13).replace(/[-T:]/g, '');
+    for (const f of [SAVE_FILE, GUILD_FILE, MAIL_FILE, ACCOUNT_FILE]) {
+      if (!existsSync(f)) continue;
+      const base = f.split(/[\\/]/).pop().replace('.json', '');
+      copyFileSync(f, join(BACKUP_DIR, `${base}-${stamp}.json`));
+      const old = readdirSync(BACKUP_DIR).filter((x) => x.startsWith(base + '-')).sort();
+      for (const x of old.slice(0, Math.max(0, old.length - 72))) unlinkSync(join(BACKUP_DIR, x));
+    }
+  } catch (e) { console.error('Hourly backup failed:', e.message); }
+}
+
+let saves = safeRead(SAVE_FILE, 'Hero saves') || {};
 // accounts: a password per hero name (salted scrypt), set the first time a name is used
 let accounts = {};
-try { accounts = JSON.parse(readFileSync(ACCOUNT_FILE, 'utf8')); } catch {}
+accounts = safeRead(ACCOUNT_FILE, 'Accounts') || {};
 const hashPass = (pass, salt) => scryptSync(String(pass), salt, 32).toString('hex');
 function checkPass(name, pass) {
   const key = name.trim().slice(0, 16).toLowerCase() || 'wanderer';
@@ -51,17 +96,19 @@ function checkPass(name, pass) {
 function setPass(name, pass) {
   const key = name.trim().slice(0, 16).toLowerCase() || 'wanderer', salt = randomBytes(12).toString('hex');
   accounts[key] = { salt, hash: hashPass(pass, salt), created: new Date().toISOString() };
-  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-  writeFileSync(ACCOUNT_FILE, JSON.stringify(accounts, null, 1));
+  safeWrite(ACCOUNT_FILE, JSON.stringify(accounts, null, 1));
 }
 let saveTimer = null;
 function persist() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-    writeFileSync(SAVE_FILE, JSON.stringify(saves, null, 1));
-  }, 1000);
+  saveTimer = setTimeout(saveNow, 1000);
 }
+function saveNow() {
+  clearTimeout(saveTimer); saveTimer = null;
+  try { safeWrite(SAVE_FILE, JSON.stringify(saves, null, 1)); } catch (e) { console.error('!! Could not save heroes:', e.message); setTimeout(persist, 5000); }
+}
+hourlyBackup(); setInterval(hourlyBackup, 60 * 60 * 1000);
+const BANK_LOG = join(DATA_DIR, 'bank-log.txt');
 
 const world = new World({
   trustClientSaves: false,   // the server owns progress; client-sent saves are ignored
@@ -69,11 +116,13 @@ const world = new World({
     savePlayer: (_cid, name, data) => { saves[name.toLowerCase()] = data; persist(); },
     loadPlayer: (name) => saves[name.toLowerCase()] || null,
     // guilds live in their own file next to the player saves
-    loadGuilds: () => { try { return JSON.parse(readFileSync(GUILD_FILE, 'utf8')); } catch { return null; } },
+    loadGuilds: () => safeRead(GUILD_FILE, 'Guilds'),
     // the post: every hero's mailbox, next to the player saves
-    loadMail: () => { try { return JSON.parse(readFileSync(MAIL_FILE, 'utf8')); } catch { return null; } },
-    saveMail: (m) => { try { if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true }); writeFileSync(MAIL_FILE + '.tmp', JSON.stringify(m)); renameSync(MAIL_FILE + '.tmp', MAIL_FILE); } catch (e) { console.error('Could not save the mail:', e.message); } },
-    saveGuilds: (g) => { try { if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true }); writeFileSync(GUILD_FILE, JSON.stringify(g)); } catch (e) { console.error('Could not save guilds:', e.message); } },
+    loadMail: () => safeRead(MAIL_FILE, 'Mail'),
+    saveMail: (m) => { try { safeWrite(MAIL_FILE, JSON.stringify(m)); } catch (e) { console.error('Could not save the mail:', e.message); } },
+    // every vault change, one line each, so any vault can be put back by hand
+    bankLog: (row) => { try { if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true }); appendFileSync(BANK_LOG, JSON.stringify(row) + '\n'); } catch {} },
+    saveGuilds: (g) => { try { safeWrite(GUILD_FILE, JSON.stringify(g)); } catch (e) { console.error('Could not save guilds:', e.message); } },
   },
 });
 
@@ -208,10 +257,11 @@ http.listen(PORT, process.env.HM_BIND || undefined, () => {
 
 function shutdown() {
   for (const [cid] of world.clients) world.removeClient(cid);
-  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-  writeFileSync(SAVE_FILE, JSON.stringify(saves, null, 1));
+  saveNow();
   process.exit(0);
 }
+// a crash still saves everyone first
+process.on('uncaughtException', (e) => { console.error('!! Crash:', e); try { for (const [cid] of world.clients) world.removeClient(cid); } catch {} saveNow(); process.exit(1); });
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 process.on('SIGHUP', shutdown);      // Windows: the host window was closed

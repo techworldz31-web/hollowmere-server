@@ -43,7 +43,15 @@ export const socialMethods = {
     if (!Object.keys(G.members).length) return null;
     if (g.bank) {
       if (Number.isInteger(g.bank.gold) && g.bank.gold >= 0) G.bank.gold = g.bank.gold;
-      (g.bank.items || []).slice(0, GUILD_BANK_SLOTS).forEach((it, i) => { if (it && ITEMS[it.item]) G.bank.items[i] = { item: it.item, qty: Math.max(1, it.qty | 0), ...(it.r ? { r: it.r } : {}), ...(it.b ? { b: it.b } : {}) }; });
+      // items the game no longer knows, or past the last slot, are kept aside (g.lost), never thrown away
+      G.lost = Array.isArray(g.lost) ? g.lost.filter((x) => x && typeof x.item === 'string') : [];
+      (g.bank.items || []).forEach((it, i) => {
+        if (!it || typeof it.item !== 'string') return;
+        if (ITEMS[it.item] && i < GUILD_BANK_SLOTS) G.bank.items[i] = { item: it.item, qty: Math.max(1, it.qty | 0), ...(it.r ? { r: it.r } : {}), ...(it.b ? { b: it.b } : {}) };
+        else G.lost.push({ ...it });
+      });
+      // kept-aside items the game knows again go back into free slots
+      G.lost = G.lost.filter((it) => { const j = ITEMS[it.item] ? G.bank.items.indexOf(null) : -1; if (j < 0) return true; G.bank.items[j] = { ...it, qty: Math.max(1, it.qty | 0) }; return false; });
     }
     if (Array.isArray(g.log)) G.log = g.log.slice(-30).map(String);
     this.guilds.set(key(G.name), G);
@@ -192,8 +200,13 @@ export const socialMethods = {
       case 'disband': {
         if (!g || myRank !== 0) return say('Only the Guild Master can disband the guild.');
         for (const e of this.guildMembersOnline(g)) { e.guildKey = null; e.tagDirty = true; this.privateEvent(e, { e: 'guild', g: null }); this.privateEvent(e, { e: 'sys', text: `${g.name} has been disbanded.` }); }
-        // what was in the bank goes back to the Guild Master's vault as gold (items are lost)
+        // everything in the guild bank goes to the Guild Master: gold to their vault, items to their
+        // vault (then pack); anything that doesn't fit is kept for them and handed over as room frees up
         p.bank.gold += g.bank.gold; p.selfDirty = true;
+        const items = g.bank.items.filter(Boolean).concat(g.lost || []);
+        if (items.length) { (p.limbo ||= []).push(...items.map((it) => ({ ...it }))); this.restoreLimbo(p); }
+        say(items.length ? `The guild bank's ${items.length} item${items.length > 1 ? 's' : ''} and ${g.bank.gold} gold went to your vault${p.limbo?.length ? ` (${p.limbo.length} more will arrive when you have room)` : ''}.` : `The guild bank's ${g.bank.gold} gold went to your vault.`);
+        this.savePlayerNow?.(p);
         this.guilds.delete(key(g.name)); this.saveGuilds();
         return;
       }
@@ -210,17 +223,23 @@ export const socialMethods = {
         if (g.bank.items[i]) g.bank.items[i].qty += it.qty; else g.bank.items[i] = { ...it };
         p.inv[m.slot] = null; p.selfDirty = true;
         this.guildLog(g, `${p.name} deposited ${itemName(it)}${it.qty > 1 ? ' x' + it.qty : ''}.`);
-        this.pushGuild(g);
+        this.pushGuild(g); this.saveGuilds(); this.savePlayerNow?.(p);   // both sides written at once
         return;
       }
       case 'wd': {
         if (!g || !CAN.withdraw(myRank)) return say('Only Veterans and above can take from the guild bank.');
         if (!this.nearBanker(p)) return say('The guild bank is kept at the Bank of Hollowmere. Speak to a clerk there.');
         const it = g.bank.items[m.i]; if (!it) return;
-        if (!this.addItem(p, it.item, it.qty, it.r, it.b)) return say('Your pack is full.');
-        g.bank.items[m.i] = null;
-        this.guildLog(g, `${p.name} took ${itemName(it)}${it.qty > 1 ? ' x' + it.qty : ''}.`);
-        this.pushGuild(g);
+        // only what actually fits in the pack leaves the guild bank; the rest stays there
+        let moved;
+        if (ITEMS[it.item]?.stack) { const before = this.countItem(p, it.item); this.addItem(p, it.item, it.qty); moved = this.countItem(p, it.item) - before; }
+        else moved = this.addItem(p, it.item, 1, it.r || 0, it.b || null) ? 1 : 0;
+        if (!moved) return say('Your pack is full.');
+        const took = { ...it, qty: moved };
+        it.qty -= moved; if (it.qty <= 0) g.bank.items[m.i] = null;
+        if (it.qty > 0) say(`Your pack only had room for ${moved}; the rest is still in the guild bank.`);
+        this.guildLog(g, `${p.name} took ${itemName(took)}${moved > 1 ? ' x' + moved : ''}.`);
+        this.pushGuild(g); this.saveGuilds(); this.savePlayerNow?.(p);
         return;
       }
       case 'depgold': case 'wdgold': {
@@ -238,7 +257,7 @@ export const socialMethods = {
           this.guildLog(g, `${p.name} took ${amt} gold.`);
         }
         p.selfDirty = true;
-        this.pushGuild(g);
+        this.pushGuild(g); this.saveGuilds(); this.savePlayerNow?.(p);
         return;
       }
       case 'view': if (g) this.privateEvent(p, { e: 'guild', g: this.guildView(g, p) }); else this.privateEvent(p, { e: 'guild', g: null }); return;
