@@ -147,6 +147,7 @@ export const OBJECTS = {
   // the ship the hero washed up from, broken on the beach of Tutorial Island (Poly Haven's Dutch ship, CC0, wrecked in Blender)
   shipwreck:    { sprites: ['shipwreck'], foot: [1, 1], solid: true, fade: true },
   // a timber of the wreck on Tutorial Island, still burning: flames, embers, firelight and black smoke
+  mailbox:      { sprites: ['mailbox'], foot: [1, 1], solid: true },   // the post (see world_mail.js)
   dock:         { sprites: ['dock'], foot: [2, 10], solid: false },   // Tutorial Island's pier (Poly Haven, Rico Cilliers, CC0)
   burning_beam: { sprites: ['logs'], foot: [1, 1], solid: true, fade: true, fire: [{ x: 0, y: 0, z: 0.25, s: 1.15, n: 3 }], lights: [{ x: 0, y: 0, z: 0.8, r: 5, c: FIRE, flicker: true }] },
   rockpile:     { sprites: ['rockpile'], foot: [1, 1], solid: true },
@@ -510,6 +511,7 @@ Object.assign(NPCS, {
   workbench:    { name: 'Workbench', sprite: null, role: 'station', station: 'craft' },
   waystone:     { name: 'Waystone', sprite: null, role: 'station', station: 'waystone' },
   // the places off the road (shared/mapgen.js, shared/world_pois.js)
+  mailbox:      { name: 'Mailbox', sprite: null, role: 'station', station: 'mail' },
   poi_note:     { name: 'A Weathered Note', sprite: null, role: 'station', station: 'poi' },
   poi_shrine:   { name: 'Wayside Shrine', sprite: null, role: 'station', station: 'poi' },
   poi_cache:    { name: 'Fallen Rubble', sprite: null, role: 'station', station: 'poi' },

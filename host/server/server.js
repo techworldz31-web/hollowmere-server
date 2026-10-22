@@ -9,7 +9,7 @@
 
 import { createServer } from 'node:http';
 import { randomUUID, scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, appendFileSync, renameSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
@@ -25,6 +25,7 @@ const DEV = process.argv.includes('--dev');
 const DATA_DIR = process.env.HM_DATA || join(ROOT, 'server', 'data');
 const SAVE_FILE = join(DATA_DIR, 'players.json');
 const GUILD_FILE = join(DATA_DIR, 'guilds.json');
+const MAIL_FILE = join(DATA_DIR, 'mail.json');
 const ACCOUNT_FILE = join(DATA_DIR, 'accounts.json');
 const FEEDBACK_FILE = join(DATA_DIR, 'feedback.txt');
 // the built game the server hands out (the host package points this at the folder the zips were unpacked into)
@@ -69,6 +70,9 @@ const world = new World({
     loadPlayer: (name) => saves[name.toLowerCase()] || null,
     // guilds live in their own file next to the player saves
     loadGuilds: () => { try { return JSON.parse(readFileSync(GUILD_FILE, 'utf8')); } catch { return null; } },
+    // the post: every hero's mailbox, next to the player saves
+    loadMail: () => { try { return JSON.parse(readFileSync(MAIL_FILE, 'utf8')); } catch { return null; } },
+    saveMail: (m) => { try { if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true }); writeFileSync(MAIL_FILE + '.tmp', JSON.stringify(m)); renameSync(MAIL_FILE + '.tmp', MAIL_FILE); } catch (e) { console.error('Could not save the mail:', e.message); } },
     saveGuilds: (g) => { try { if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true }); writeFileSync(GUILD_FILE, JSON.stringify(g)); } catch (e) { console.error('Could not save guilds:', e.message); } },
   },
 });

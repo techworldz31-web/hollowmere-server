@@ -1264,6 +1264,47 @@ body.on-isle #daily-track { display: none !important; }
 /* fresh gear in the pack */
 #btn-inv.has-new::after { content: 'New!'; position: absolute; top: -9px; right: -10px; padding: 1px 5px; font: 700 10px/1.3 var(--display, serif); color: #2a1a06; background: linear-gradient(#ffe48a, #f0b53a); border: 1px solid #7a4f12; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,.6); animation: hintBob 1.4s ease-in-out infinite; pointer-events: none; }
 #btn-inv { position: relative; }
+
+/* ---- the post ------------------------------------------------------------------------ */
+#panel-mail { left: 14px; top: 132px; width: 430px; max-height: calc(100vh - 160px); overflow-y: auto; }
+@media (max-width: 900px) { #panel-mail { top: 300px; width: min(430px, calc(100vw - 28px)); } }
+.mail-tabs { display: flex; gap: 6px; margin: 2px 0 10px; }
+.mail-tabs button { flex: 1; padding: 6px 8px; font-family: var(--display); font-weight: 700; color: #cdb98c; background: rgba(10,8,6,.45); border: 1px solid rgba(168,138,79,.4); border-radius: 4px; cursor: pointer; }
+.mail-tabs button.on { color: #ffe2a0; background: rgba(60,40,18,.7); border-color: #c9a35a; }
+#mail-list { display: flex; flex-direction: column; gap: 4px; }
+.mail-row { display: grid; grid-template-columns: 14px 1fr auto; gap: 2px 8px; align-items: center; padding: 6px 8px; border-radius: 4px; background: rgba(10,8,6,.45); box-shadow: inset 0 0 0 1px rgba(168,138,79,.3); cursor: pointer; text-align: left; color: var(--ink); border: 0; font: inherit; }
+.mail-row:hover { box-shadow: inset 0 0 0 1px #c9a35a; background: rgba(40,28,14,.6); }
+.mail-row .dot { width: 8px; height: 8px; border-radius: 50%; background: transparent; }
+.mail-row.unread .dot { background: #ffcf5a; box-shadow: 0 0 6px #ffcf5a; }
+.mail-row.unread .subj { color: #fff0c8; font-weight: 700; }
+.mail-row .subj { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail-row .from { grid-column: 2; font-size: 12px; color: #b9a57a; }
+.mail-row .att { grid-row: 1 / span 2; grid-column: 3; display: flex; gap: 3px; align-items: center; font-size: 12px; color: #ffe2a0; }
+.mail-row .att img { width: 22px; height: 22px; border-radius: 3px; }
+.mail-empty { padding: 18px 8px; text-align: center; }
+.mail-meta { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.mail-meta b { font-family: var(--display); font-size: 16px; color: #ffe2a0; }
+.mail-paper { display: block; width: 100%; box-sizing: border-box; min-height: 90px; padding: 10px 12px; border-radius: 3px; border: 1px solid #8a7350; white-space: pre-wrap; font: 14px/1.45 Georgia, serif;
+  color: #3a2a16; background: linear-gradient(180deg, #efe2bf, #e2d0a4); box-shadow: inset 0 0 14px rgba(120,90,40,.35); resize: vertical; }
+textarea.mail-paper { outline: none; }
+.mail-att { display: flex; gap: 6px; margin: 8px 0; min-height: 44px; }
+.mail-att .slot { width: 44px; height: 44px; }
+.mail-att .gold-chip { display: flex; align-items: center; gap: 4px; padding: 0 10px; border-radius: 4px; background: rgba(10,8,6,.5); color: #ffe2a0; font-weight: 700; }
+.mail-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.mail-actions .learn { padding: 4px 10px; font-size: 13px; }
+.mail-field { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 8px; margin-bottom: 6px; }
+.mail-field label { font-family: var(--display); color: #cdb98c; }
+.mail-field input, .mail-gold input { padding: 5px 8px; border-radius: 3px; border: 1px solid #6a5434; background: rgba(10,8,6,.6); color: #f0e4c0; font: inherit; }
+.mail-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 10px 2px 0; font-family: var(--display); color: var(--gold); }
+.mail-head span { font-family: Georgia, serif; font-variant: normal; text-transform: none; letter-spacing: 0; font-weight: 400; text-align: right; }
+.mail-gold { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; }
+.mail-gold input { width: 110px; }
+#ms-send { width: 100%; }
+#inv-grid .slot.enclosed { outline: 2px solid #ffcf5a; outline-offset: -2px; opacity: .55; }
+#mm-mail { left: 168px; top: 150px; }
+#mm-mail:not([hidden]) { animation: mailPulse 1.6s ease-in-out infinite; }
+@keyframes mailPulse { 0%, 100% { filter: drop-shadow(0 2px 3px rgba(0,0,0,.7)); } 50% { filter: drop-shadow(0 0 9px rgba(255,214,110,.95)); } }
+#mm-mail[hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -1295,7 +1336,7 @@ body.on-isle #daily-track { display: none !important; }
       <div id="mm-disc"><canvas id="minimap" width="360" height="360"></canvas><i id="mm-ring"></i><div id="mm-compass" aria-hidden="true"><span class="cd north" style="left:180.3px;top:44.8px">N</span><span class="ic" style="left:189.0px;top:90.0px">NE</span><span class="cd" style="left:180.3px;top:135.2px">E</span><span class="ic" style="left:90.0px;top:189.0px">SE</span><span class="cd" style="left:-0.3px;top:135.2px">S</span><span class="ic" style="left:-9.0px;top:90.0px">SW</span><span class="cd" style="left:-0.3px;top:44.8px">W</span><span class="ic" style="left:90.0px;top:-9.0px">NW</span></div><div id="mm-coords" data-tip="Your position on the map"></div>
         <div id="track-toggles"><button data-track="trackHerbs" data-tip="Track herbs on the minimap">🌿</button><button data-track="trackOre" data-tip="Track ore on the minimap">⛏</button><button data-track="trackWood" data-tip="Track trees on the minimap">🌲</button></div>
         <button id="mm-zin" class="mm-rb" data-tip="Zoom the minimap in">+</button><button id="mm-zout" class="mm-rb" data-tip="Zoom the minimap out">−</button>
-        <button id="mm-wmap" class="mm-rb big" data-tip="World map (M)"></button><button id="mm-social" class="mm-rb" data-tip="Guild &amp; friends (X)"></button></div>
+        <button id="mm-wmap" class="mm-rb big" data-tip="World map (M)"></button><button id="mm-social" class="mm-rb" data-tip="Guild &amp; friends (X)"></button><button id="mm-mail" class="mm-rb" hidden data-tip="You have mail! Visit a mailbox to read it.">✉</button></div>
       <div id="clock" data-tip="Time of day"></div>
       <div id="mode-badge"></div>
       <div id="players-online"></div>
@@ -1438,6 +1479,29 @@ body.on-isle #daily-track { display: none !important; }
     </section>
 
     <section id="panel-admin" class="panel frame" hidden></section>
+    <section id="panel-mail" class="panel frame" hidden>
+      <header><h3>Mailbox</h3><button class="x" data-close="panel-mail">×</button></header>
+      <div class="mail-tabs"><button data-mt="inbox" class="on">Inbox <span id="mail-count" class="dim"></span></button><button data-mt="send">Write a letter</button></div>
+      <div id="mail-inbox">
+        <div id="mail-list"></div>
+        <div id="mail-read" hidden>
+          <div class="mail-meta"><b id="mr-subj"></b><span id="mr-from" class="dim small"></span></div>
+          <div id="mr-body" class="mail-paper"></div>
+          <div id="mr-att" class="mail-att"></div>
+          <div class="mail-actions"><button id="mr-take" class="learn">Take all</button><button id="mr-reply" class="learn">Reply</button><button id="mr-back" class="learn" data-tip="Send it back to whoever sent it, with everything inside">Send back</button><button id="mr-del" class="learn">Delete</button><button id="mr-close" class="learn">Inbox</button></div>
+        </div>
+      </div>
+      <div id="mail-send" hidden>
+        <div class="mail-field"><label for="ms-to">To</label><input id="ms-to" list="ms-names" maxlength="16" autocomplete="off" spellcheck="false" placeholder="Hero's name"><datalist id="ms-names"></datalist></div>
+        <div class="mail-field"><label for="ms-subj">Subject</label><input id="ms-subj" maxlength="40" autocomplete="off"></div>
+        <textarea id="ms-body" class="mail-paper" maxlength="500" rows="6" placeholder="Write your letter..."></textarea>
+        <div class="mail-head"><b>Enclosed</b><span class="dim small">Click items in your pack to add them (up to 4)</span></div>
+        <div id="ms-att" class="mail-att"></div>
+        <div class="mail-gold"><span class="dim">Gold</span><input id="ms-gold" type="number" min="0" step="1" placeholder="0" autocomplete="off"><span id="ms-postage" class="dim small"></span></div>
+        <button id="ms-send" class="buy">Send</button>
+      </div>
+    </section>
+
     <section id="panel-bank" class="panel frame" hidden>
       <header><h3>Bank of Hollowmere</h3><button id="btn-sort-bank" class="hdr-btn" data-tip="Merge stacks and put like with like">Sort</button><button class="x" data-close="panel-bank">×</button></header>
       <p id="bank-clerk" class="dim small"></p>

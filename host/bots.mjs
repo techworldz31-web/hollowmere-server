@@ -50,6 +50,7 @@ const NPC_AT = {};                                       // npc kind -> where th
 for (const n of MAP.npcs) NPC_AT[n.kind] ||= { x: n.x, y: n.y };
 for (const [id, s] of Object.entries(MAP.spots || {})) NPC_AT['spot:' + id] = s;
 const SHOP = (k) => NPC_AT[k] && NPCS[k];
+const MAILBOXES = (MAP.stations || []).filter((s) => s.kind === 'mailbox');
 // which monsters drop an item (quest items, materials)
 const DROPS_FROM = {};
 const addDrop = (item, kind) => { if (SPAWNS[kind]) (DROPS_FROM[item] ||= new Set()).add(kind); };
@@ -176,6 +177,9 @@ class Bot {
     else if (ev.e === 'party') this.party = ev.party || null;
     else if (ev.e === 'chat' && ev.from && ev.from !== this.name && !ev.sys && !ev.out) this.onChat(ev);
     else if (ev.e === 'sys' && DEBUG) this.log('sys:', ev.text);
+    // the post: a letter from a real player gets read (and answered) at the nearest mailbox soon
+    else if (ev.e === 'mailnew' && (ev.login || !BB.isBot(ev.from))) this.mem.postDue ??= Date.now() + rnd(20000, 70000);
+    else if (ev.e === 'mailbox') { this.mailbox = ev.box || []; this.mailboxAt = Date.now(); }
     else if (ev.e === 'tinvite') this.send({ t: 'trade', op: 'no' });
     else if (ev.e === 'ginvite') this.send({ t: 'guild', op: 'decline' });
   }
@@ -334,6 +338,7 @@ class Bot {
     if (task?.turnin) add(330, 'turnin', { task });
     if (this.needsTown()) add(310, 'town');
     if (this.specDue()) add(300, 'spec');
+    if (this.mem.postDue && now > this.mem.postDue && MAILBOXES.length) add(290, 'post');
     if (task?.offer) add(280, 'accept', { task });
     if (task?.work) add(250 * this.trait.quester + 30, 'quest', { task });
     // 10. hunt something fitting nearby, or go to a good hunting ground
@@ -413,6 +418,7 @@ class Bot {
       case 'turnin': case 'accept': return this.talkTo(o.task.npc, o.kind === 'accept' ? o.task.offer : null, o.task.why);
       case 'town': return this.townErrand();
       case 'spec': return this.chooseSpec();
+      case 'post': return this.post();
       case 'quest': return this.questWork(o.task);
       case 'grind': return this.grind();
     }
@@ -656,6 +662,46 @@ class Bot {
       this.nextAt = Date.now() + 2000; return;
     }
     if (n && Date.now() - (this.talkAt || 0) > 4000) { this.talkAt = Date.now(); this.send({ t: 'interact', id: n.i }); }
+  }
+  // the post: walk to the nearest mailbox, take what's in the letters, and write back
+  post() {
+    const me = this.me, now = Date.now();
+    const mb = MAILBOXES.slice().sort((a, b) => dist(a, me) - dist(b, me))[0];
+    if (dist(mb, me) > 2.6) return this.goTo(mb.x + 1.2, mb.y + 0.6, 'checking the post', 1.2);
+    this.goal = null;
+    if (!this.mailbox || now - (this.mailboxAt || 0) > 20000) { if (now - (this.openAt || 0) > 4000) { this.openAt = now; this.send({ t: 'mail', op: 'open' }); } return; }
+    const replied = this.mem.replied || (this.mem.replied = new Set());
+    // one thing per moment, like a person at the box
+    const full = this.mailbox.find((l) => (l.items?.length || l.gold) && this.freeSlots() > (l.items?.length || 0));
+    if (full) { this.send({ t: 'mail', op: 'take', id: full.id }); (this.mem.gifts ||= {})[full.id] = { items: full.items, gold: full.gold }; full.items = []; full.gold = 0; this.nextAt = now + rnd(900, 1600); return; }
+    const answer = this.mailbox.find((l) => !replied.has(l.id) && l.from && !BB.isBot(l.from) && !l.returned);
+    if (answer) {
+      replied.add(answer.id);
+      this.send({ t: 'mail', op: 'read', id: answer.id });
+      this.send({ t: 'mail', op: 'send', to: answer.from, subj: (/^re: /i.test(answer.subj) ? answer.subj : `Re: ${answer.subj}`).slice(0, 40), body: this.letterReply(answer) });
+      if (Math.random() < this.trait.chatty) this.say(pick(['just got a letter, nice', 'oh, mail!', 'writing back to a friend']));
+      this.nextAt = now + rnd(2500, 5000); return;
+    }
+    for (const l of this.mailbox) if (!l.read) { l.read = true; this.send({ t: 'mail', op: 'read', id: l.id }); }
+    // tidy up: empty letters go
+    const old = this.mailbox.find((l) => !l.items?.length && !l.gold && replied.has(l.id));
+    if (old && this.mailbox.length > 12) { this.send({ t: 'mail', op: 'del', id: old.id }); this.mailbox = this.mailbox.filter((x) => x !== old); return; }
+    this.mem.postDue = null; this.mailbox = null;
+  }
+  letterReply(l) {
+    const was = this.mem.gifts?.[l.id] || l; delete this.mem.gifts?.[l.id];
+    const gifts = (was.items || []).map((it) => ITEMS[it.item]?.name).filter(Boolean); l = { ...l, gold: was.gold };
+    const lines = [];
+    lines.push(pick([`Dear ${l.from},`, `${l.from}!`, `Hello ${l.from},`, `Hi ${l.from},`]));
+    lines.push('');
+    if (gifts.length || l.gold) lines.push(pick([`Thank you for the ${[...gifts, l.gold ? `${l.gold} gold` : null].filter(Boolean).join(' and ')}! That will come in handy.`, `You didn't have to send me the ${[...gifts, l.gold ? 'gold' : null].filter(Boolean).join(' and ')}, but I'm glad you did. Thank you!`, `What a nice surprise. The ${[...gifts, l.gold ? 'gold' : null].filter(Boolean).join(' and ')} made my day.`]));
+    else lines.push(pick(['Good to hear from you!', 'Thanks for the letter, it made my day.', 'Always nice to get mail out here.']));
+    const where = this.placeName(this.me), lv = this.lv;
+    lines.push(pick([`I'm level ${lv} now and ${where}, ${this.plan?.why && this.plan.why !== 'post' ? this.plan.why : 'keeping busy'}.`, `Things are good ${where}. Level ${lv} and counting!`, `Writing this from the mailbox ${where}. The monsters keep me busy.`]));
+    if (/\?/.test(l.body || '')) lines.push(pick(['As for your question: I think so, yes! Ask me again when we meet.', "Good question. I'll tell you when we meet, it's a long story.", "Hmm, I'm not sure. Let's figure it out together sometime."]));
+    lines.push(pick(['Invite me to a party sometime and we can hunt together.', 'Hope to see you on the road.', "Write again soon!", 'Stay safe out there.']));
+    lines.push(''); lines.push(`- ${this.name.replace(/Bot$/, '')}`);
+    return lines.join('\n').slice(0, 480);
   }
   // little things done between decisions: skill points, gear, the horse
   housekeeping(now) {

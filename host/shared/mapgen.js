@@ -963,6 +963,24 @@ export function generateMap(seed = WORLD_SEED) {
   placeStone('ridgewatch', spots.ridgewatch.x - 4, spots.ridgewatch.y + 2);
   placeStone('hermitage', spots.hermitage.x + 3, spots.hermitage.y + 2);
   placeStone('fenwatch', spots.fenwatch.x + 3, spots.fenwatch.y - 3);
+  // mailboxes (the post, see world_mail.js): on the square, by the bank, by the inn, and one at each
+  // camp beside its waystone. Same clear ring round each, so none ever blocks a way through.
+  const placeMailbox = (x, y) => {
+    for (let r = 0; r <= 6; r++) for (let oy = -r; oy <= r; oy++) for (let ox = -r; ox <= r; ox++) {
+      if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue;
+      const tx = Math.floor(x) + ox, ty = Math.floor(y) + oy;
+      let ok = canPlace('mailbox', tx, ty, true);
+      for (let j = -1; j <= 1 && ok; j++) for (let i = -1; i <= 1 && ok; i++) {
+        const k = idx(tx + i, ty + j);
+        if (!inside(tx + i, ty + j) || occupied[k] || solid[k] || terrain[k] === TERRAIN.WATER) ok = false;
+      }
+      if (!ok) continue;
+      place('mailbox', tx, ty);
+      return;
+    }
+  };
+  placeMailbox(98, 107); placeMailbox(96, 95); placeMailbox(112, 98);
+  for (const id of ['thornwick', 'ridgewatch', 'hermitage', 'fenwatch']) { const st = objects.find((o) => o.kind === 'waystone' && o.stone === id); if (st) placeMailbox(st.x + 2.5, st.y + 0.5); }
 
   // ---- places off the road: abandoned camps with a note left behind, wayside shrines that
   // bless whoever kneels, a fisherman's hut on the lake, ruins with something still in them.
@@ -1017,6 +1035,7 @@ export function generateMap(seed = WORLD_SEED) {
     if (o.kind === 'campfire' && Math.hypot(o.x - C.x, o.y - C.y) < 3) stations.push({ kind: 'campfire', x: o.x, y: o.y });
     if (o.kind === 'windmill') stations.push({ kind: 'mill', x: o.x, y: o.y + 0.6 });
     if (o.kind === 'waystone') stations.push({ kind: 'waystone', x: o.x, y: o.y, stone: o.stone });
+    if (o.kind === 'mailbox') stations.push({ kind: 'mailbox', x: o.x, y: o.y });
     if (o.kind === 'campfire' && Object.values(spots).some((sp) => Math.hypot(sp.x - o.x, sp.y - o.y) < 2)) stations.push({ kind: 'campfire', x: o.x, y: o.y });
     if (o.kind === 'anvil' && Object.values(spots).some((sp) => Math.hypot(sp.x - o.x, sp.y - o.y) < 6)) stations.push({ kind: 'workbench', x: o.x, y: o.y });
   }

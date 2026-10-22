@@ -25,6 +25,7 @@ import { travelMethods, TRAVEL } from './world_travel.js';
 import { partyMethods, PARTY_SHARE_RANGE } from './world_party.js';
 import { progressMethods, freshProg } from './world_progress.js';
 import { socialMethods } from './world_social.js';
+import { mailMethods } from './world_mail.js';
 import { tutorialMethods } from './world_tutorial.js';
 import { bossMethods } from './world_bosses.js';
 import { poiMethods } from './world_pois.js';
@@ -75,6 +76,7 @@ export class World {
     this.kindCount = {}; for (const s of this.map.spawns) this.kindCount[s.kind] = (this.kindCount[s.kind] || 0) + 1;
     this.initProgress();
     this.initSocial();
+    this.initMail();
     this.seatTaken = new Set();      // town benches someone is sitting on
     this.danceTaken = new Set();     // festival dance spots
     for (const n of this.map.npcs) this.spawnNpc(n.kind, n.x, n.y, n.dir, { home: n.home, roam: n.roam, route: n.route, post: n.post });
@@ -119,6 +121,7 @@ export class World {
     this.farmRestore(p, p.farmSave); p.farmSave = null;
     this.partyOnJoin(p);
     this.socialPresence(p, true);
+    this.mailLogin(p);
     return true;
   }
 
@@ -196,6 +199,7 @@ export class World {
     if (Array.isArray(s.friends)) p.friends = s.friends.filter((f) => typeof f === 'string' && f.length <= 16).slice(0, 50);
     if (s.tut && typeof s.tut === 'object') p.tut = { s: Math.max(0, Math.min(99, s.tut.s | 0)), done: !!s.tut.done };
     if (s.guildSolo && !this.hooks.saveGuilds && !this.guilds?.has(String(s.guildSolo.name || '').toLowerCase())) this.restoreGuild?.(s.guildSolo);
+    if (Array.isArray(s.mailBox)) this.restoreMailSolo(p, s.mailBox);
     if (okInt(s.level, 1, 99)) p.level = s.level;
     if (okInt(s.xp, 0, 1e9)) p.xp = s.xp;
     if (okInt(s.gold, 0, 1e9)) p.gold = s.gold;
@@ -264,7 +268,7 @@ export class World {
     return { v: 3, name: p.name, cls: p.cls, level: p.level, xp: p.xp, gold: p.gold, hp: p.hp, inv: p.inv, equip: p.equip,
       skills: p.skills, quests: p.quests, titles: p.titles, title: p.title, pets: p.pets, pet: p.pet, dye: p.dye, bosses: p.bosses,
       bank: p.bank, trades: p.trades, fishLog: p.fishLog, recipes: p.recipes, farm: this.farmSave(p), unlocks: p.unlocks,
-      spec: p.spec, mounts: p.mounts, mount: p.mount, stones: p.stones, prog: p.prog && { ...p.prog, lastSeen: Date.now() }, friends: p.friends, tut: p.tut, guildSolo: !this.hooks.saveGuilds && this.guildOf(p) ? this.guildOf(p) : undefined, hearthLeft: Math.max(0, Math.ceil((p.hearthReady - this.tick) / TICK_RATE)),
+      spec: p.spec, mounts: p.mounts, mount: p.mount, stones: p.stones, prog: p.prog && { ...p.prog, lastSeen: Date.now() }, friends: p.friends, tut: p.tut, guildSolo: !this.hooks.saveGuilds && this.guildOf(p) ? this.guildOf(p) : undefined, mailBox: this.mailSolo(p), hearthLeft: Math.max(0, Math.ceil((p.hearthReady - this.tick) / TICK_RATE)),
       x: round2(pos.x), y: round2(pos.y), mapv: MAP_VERSION };
   }
 
@@ -377,6 +381,8 @@ export class World {
     if (this.tick % 5 === 2) this.updateTrades();
     if (this.tick % TICK_RATE === 5) this.rareTick();
     if (this.tick % TICK_RATE === 6) this.socialTick();
+    if (this.tick % (TICK_RATE * 30) === 9 && this.mailDirty) this.saveMail();      // letters marked read
+    if (this.tick % (TICK_RATE * 3600) === 11) this.expireMail();
     if (this.tick % TICK_RATE === 3) this.updateCrops();
     if (this.tick >= this.weatherUntil) {
       if (this.weather) this.weather = 0;
@@ -474,6 +480,7 @@ export class World {
       const bfx = {};
       for (const k of ['meal', 'elixir']) { const b = p.buffs[k]; if (b && b.until > this.tick) bfx[k] = { k: b.kind, until: b.until }; }
       snap.self.bfx = bfx; snap.self.binfo = binfo;
+      snap.self.mailN = this.unread(p);
       snap.self.tut = this.tutView(p);
       if (p.prog) snap.self.prog = { rested: Math.round(p.prog.rested), daily: p.prog.daily, ach: Object.keys(p.prog.ach), disc: p.prog.stats.disc.length, discN: this.zoneList?.length || 0, found: p.prog.stats.disc.filter((id) => id.startsWith('poi_')), rares: p.prog.stats.rares, kills: p.prog.stats.kills };
       if (p.prog && this.tick - (p.achvSent || -1e9) > T(4)) { p.achvSent = this.tick; snap.self.prog.achv = this.achView(p); }
@@ -586,6 +593,7 @@ export class World {
       }
       case C2S.GUILD: return this.guildOp(p, m);
       case C2S.FRIEND: return this.friendOp(p, m);
+      case C2S.MAIL: return this.mailCommand(p, m);
       case C2S.TUT: return this.tutorialOp(p, m);
       case C2S.PREFS: p.auto = m.auto; if (m.loot !== undefined) p.autoLoot = m.loot === 1; break;
       case C2S.LOOTALL: return this.lootAll(p);
@@ -716,6 +724,7 @@ export class World {
         else if (t.type === 'crop') { this.dismount(p, true); this.farmInteract(p, t); }
         else if (t.type === 'station' && t.poi) this.poiUse(p, t);
         else if (t.type === 'station' && t.kind === 'waystone') { p.dir = dirFromVector(t.x - p.x, t.y - p.y); this.stoneMenu(p, t); }
+        else if (t.type === 'station' && t.kind === 'mailbox') { this.dismount(p, true); p.dir = dirFromVector(t.x - p.x, t.y - p.y); this.mailOpen(p, t); }
         else if (t.type === 'station') { this.dismount(p, true); p.dir = dirFromVector(t.x - p.x, t.y - p.y); this.send(p.clientId, { t: S2C.CRAFT, npc: t.id, name: t.name, at: NPCS[t.kind].station || 'cook' }); }
         if (p.zone !== t.zone) return;   // went through a portal
       } else if (!p.path) p.pending = null;
@@ -2086,4 +2095,4 @@ export class World {
 }
 
 // trades (fishing, gathering, cooking) and town events live in their own files
-Object.assign(World.prototype, tradeMethods, townMethods, farmMethods, questMethods, travelMethods, specMethods, partyMethods, swapMethods, progressMethods, socialMethods, tutorialMethods, bossMethods, poiMethods);
+Object.assign(World.prototype, tradeMethods, townMethods, farmMethods, questMethods, travelMethods, specMethods, partyMethods, swapMethods, progressMethods, socialMethods, tutorialMethods, bossMethods, poiMethods, mailMethods);

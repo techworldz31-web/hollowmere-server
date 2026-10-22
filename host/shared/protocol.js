@@ -41,6 +41,7 @@ export const C2S = {
   DROP: 'drop',         // { slot, qty }           put an item on the ground (not in town)
   GUILD: 'guild',       // { op, name?, tag?, text?, slot?, i?, amount? }   guilds (see shared/world_social.js)
   FRIEND: 'friend',     // { op: 'add'|'remove', name }
+  MAIL: 'mail',         // { op: 'open'|'send'|'read'|'take'|'del'|'back', id?, to?, subj?, body?, slots?, gold? }   the post
   TUT: 'tut',           // { op: 'intro'|'skip'|'next' }   the guided start
 };
 
@@ -103,6 +104,9 @@ export function validate(m) {
       && (m.name === undefined || str(m.name, 24)) && (m.tag === undefined || str(m.tag, 8)) && (m.text === undefined || str(m.text, 140))
       && (m.slot === undefined || (int(m.slot) && m.slot >= 0 && m.slot < 200)) && (m.i === undefined || (int(m.i) && m.i >= 0 && m.i < 40)) && (m.amount === undefined || (num(m.amount) && m.amount >= 0 && m.amount <= 1e9));
     case C2S.FRIEND: return (m.op === 'add' || m.op === 'remove') && str(m.name, 24);
+    case C2S.MAIL: return ['open', 'send', 'read', 'take', 'del', 'back'].includes(m.op) && (m.id === undefined || str(m.id, 32)) && (m.to === undefined || str(m.to, 24))
+      && (m.subj === undefined || str(m.subj, 60)) && (m.body === undefined || str(m.body, 600)) && (m.gold === undefined || (num(m.gold) && m.gold >= 0 && m.gold <= 1e9))
+      && (m.slots === undefined || (Array.isArray(m.slots) && m.slots.length <= 4 && m.slots.every((i) => int(i) && i >= 0 && i < 200)));
     case C2S.TUT: return ['intro', 'skip', 'next', 'scene', 'sceneend'].includes(m.op) && (m.id == null || (typeof m.id === 'string' && m.id.length <= 20));
     default: return false;
   }
